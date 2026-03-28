@@ -42,13 +42,13 @@ export function HomePage() {
             <NavBar />
             <div style={ textCenter }>
                 <h1 style={ titleStyle }>Welcome to TradeSense</h1>
-                <h2>Prediction Trading Made Easy</h2>
+                <h2>Trading Learning Made Easy</h2>
                 <p style={{ wordWrap:'break-word', overflowWrap:'break-word', maxWidth:'600px', textAlign:'center', margin:'0 auto', paddingBottom:'25px' }}>
-                    TradeSense is a free intelligent tool that allows new users to understand, learn and 
-                    make prediction trading without the hassle. Learning the ropes in prediction trading
-                    can be overwhelming, complicated and can be time consuming. TradeSense takes away the 
-                    pain and makes it easy for new traders to understand and makes it easier for well-seasoned 
-                    traders to make their own predictions.
+                    TradeSense is a free intelligent tool that allows new users to understand and learn 
+                    market behavior without the hassle. Learning the ropes in trading can be overwhelming, 
+                    complicated and can be time consuming. TradeSense takes away the pain and makes it easy for 
+                    new traders to understand makret behavior and makes it easier for well-seasoned traders to reinforce
+                    their own understanding.
                 </p>
             </div>
             <section style={ sectionStyle }>
@@ -56,15 +56,16 @@ export function HomePage() {
                     <img src={ NewsSources } style={ photoStyle } />
                     <h1 style={ textCenter }><b>News Sources</b></h1>
                     <p style={ textCenter }>
-                        Make trading predictions based on big news sources. Let the news outlets come to you with 
-                        important trading information and TradeSense predict what will happen to certain stocks.
+                        Understand market behavior based on big news sources. Let the news outlets come to you with 
+                        important trading information and TradeSense will display how news behavior impacts the current
+                        market.
                     </p>
                 </div>
                 <div style={ borderStyle }>
                     <img src={ SocialMedia } style={ photoStyle }/>
                     <h1 style={ textCenter }><b>Social Media</b></h1>
                     <p style={ textCenter }>
-                        Make trading predictions based on multiple social media platforms. TradeSense will analyze 
+                        Understand market behavior based on multiple social media platforms. TradeSense will analyze 
                         expert opinions and public statements to save you time and headaches from analyzing everything
                         yourself.
                     </p>
@@ -74,7 +75,7 @@ export function HomePage() {
                     <h1 style={ textCenter }><b>Charting Tools</b></h1>
                     <p style={ textCenter }>
                         Don't understand charting tools? Not to worry! TradeSense uses complex charting tools 
-                        to make predictions and creates a basic charting tool that is easy to read and easier to understand.
+                        and creates a basic charting tool that is easy to read and easier to understand.
                     </p>
                 </div>
             </section>
@@ -88,9 +89,9 @@ export function HomePage() {
                     <p style={ textCenter }>
                         The Dashboard welcomes you and saves your previous stock watchlist as soon as you log in.
                         No need to be overwhelmed with all of the stock options, rather you choose which stock you want
-                        to watch. The Dashboard allows each stock to show up with a predicted price per stock, an increase
+                        to watch. The Dashboard allows each stock to show up with current price per stock, an increase
                         or decrease percentage, a simple stock chart with dates and price points and current news articles 
-                        with an impact rating that drive the predictions.
+                        with an impact rating that drive the understanding of market behavior to you.
                     </p>
                 </div>
                 <div style={ borderStyle }>
@@ -108,7 +109,7 @@ export function HomePage() {
                     <h1 style={ textCenter }><b>Sentiment Time-Lapse</b></h1>
                     <p style={ textCenter }>
                         The Sentiment Time-Lapse allows you to dive deeper into a stock and understand its behavior in order for you
-                        to make better predictions. News sources, social media and expert charting tools help explain the behavior of
+                        to have a better understaning of the stock. News sources, social media and expert charting tools help explain the behavior of
                         your wacthed stock, but our Sentiment Time-Lapse allows you to understand behaviors without being overwhelmed
                         with hundreds of different news sources and thousands of professional opinions. TradeSense allows you to understand 
                         the most important opinions in your own TradeSense account.
