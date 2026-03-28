@@ -41,6 +41,7 @@ export function SignupPage() {
 
   return (
     <section className="auth-page">
+      <Link to='/homepage'>Back</Link>
       <h1>Create your account</h1>
       <p className="muted-label">Set up TradeSense in minutes.</p>
       <form className="auth-form" onSubmit={handleSubmit}>
