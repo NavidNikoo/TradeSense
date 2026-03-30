@@ -12,8 +12,8 @@ import { NotFoundPage } from '../pages/NotFoundPage'
 export function AppRouter() {
   return (
     <Routes>
-      <Route path="/" element={<Navigate to="/dashboard" replace />} />
-      <Route path="/homepage" element={<HomePage />} />
+      <Route path="/" element={<HomePage />} />
+      <Route path="/homepage" element={<Navigate to="/" replace />} />
       <Route path="/login" element={<LoginPage />} />
       <Route path="/signup" element={<SignupPage />} />
 

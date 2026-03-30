@@ -20,7 +20,9 @@ const textColor = {
 const NavBar = () => {
     return (
         <nav style={ navBarStyle }>
-            <h1 style={ textColor }>TradeSense</h1>
+            <Link style={ textColor } to="/">
+                <h1 style={{ ...textColor, margin: 0 }}>TradeSense</h1>
+            </Link>
             <div style={{display:'flex', gap:'1rem', paddingRight:'50px'}}>
                 <Link style={ textColor } to="/signup">Sign up</Link>
                 <Link style={ textColor } to="/login">Log in</Link>

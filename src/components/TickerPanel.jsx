@@ -16,23 +16,42 @@ export function TickerPanel({ symbol, onSnapshot }) {
     let cancelled = false
     setLoading(true)
     setError(null)
+    setHistory([])
+    setArticles([])
+    setSentiment(null)
 
     async function load() {
       try {
-        const [quoteData, historyData, newsData] = await Promise.all([
-          getQuote(symbol),
+        // Quote is required for the card; history/news are optional enhancements.
+        const quoteData = await getQuote(symbol)
+
+        if (cancelled) return
+
+        setQuote(quoteData)
+
+        const [historyResult, newsResult] = await Promise.allSettled([
           getHistory(symbol, '1m'),
           getNews(symbol),
         ])
 
         if (cancelled) return
 
-        setQuote(quoteData)
-        setHistory(historyData.history)
-        setArticles(newsData.articles)
+        if (historyResult.status === 'fulfilled') {
+          setHistory(historyResult.value.history)
+        } else {
+          // Non-fatal: keep rendering live quote if chart API is rate-limited.
+          setHistory([])
+        }
 
-        const sentimentData = await scoreArticles(newsData.articles)
-        if (!cancelled) setSentiment(sentimentData)
+        if (newsResult.status === 'fulfilled') {
+          setArticles(newsResult.value.articles)
+          const sentimentData = await scoreArticles(newsResult.value.articles)
+          if (!cancelled) setSentiment(sentimentData)
+        } else {
+          // Non-fatal: show quote even when news API has intermittent issues.
+          setArticles([])
+          setSentiment(null)
+        }
       } catch (err) {
         if (!cancelled) setError(err.message)
       } finally {

@@ -1,5 +1,28 @@
-const API_KEY = import.meta.env.VITE_NEWS_API_KEY
-const BASE = 'https://www.alphavantage.co/query'
+import { normalizeTicker } from '../utils/tickerSymbols'
+
+const FINNHUB_KEY = import.meta.env.VITE_FINNHUB_API_KEY
+const FINNHUB_BASE = 'https://finnhub.io/api/v1'
+
+// --- In-memory cache (5 min TTL) ---
+
+const CACHE_TTL_MS = 5 * 60 * 1000
+const cache = new Map()
+
+function getCached(key) {
+  const entry = cache.get(key)
+  if (!entry) return null
+  if (Date.now() - entry.ts > CACHE_TTL_MS) {
+    cache.delete(key)
+    return null
+  }
+  return entry.data
+}
+
+function setCache(key, data) {
+  cache.set(key, { data, ts: Date.now() })
+}
+
+// --- Stub data for when no API key is configured ---
 
 function stubArticles(symbol) {
   const now = new Date()
@@ -45,41 +68,45 @@ function stubArticles(symbol) {
   }
 }
 
+// --- Public API ---
+
 export async function getNews(symbol) {
-  if (!API_KEY) return stubArticles(symbol)
+  const upper = normalizeTicker(symbol)
+
+  if (!FINNHUB_KEY) return stubArticles(upper)
+
+  const cacheKey = `news:${upper}`
+  const cached = getCached(cacheKey)
+  if (cached) return cached
 
   try {
-    const url = `${BASE}?function=NEWS_SENTIMENT&tickers=${encodeURIComponent(symbol)}&limit=8&apikey=${API_KEY}`
+    const to = new Date().toISOString().slice(0, 10)
+    const fromDate = new Date()
+    fromDate.setDate(fromDate.getDate() - 7)
+    const from = fromDate.toISOString().slice(0, 10)
+
+    const url = `${FINNHUB_BASE}/company-news?symbol=${encodeURIComponent(upper)}&from=${from}&to=${to}&token=${FINNHUB_KEY}`
     const res = await fetch(url)
     const json = await res.json()
-    const feed = json.feed
 
-    if (!feed || feed.length === 0) return stubArticles(symbol)
+    if (!Array.isArray(json) || json.length === 0) {
+      return stubArticles(upper)
+    }
 
-    const articles = feed.slice(0, 8).map((item) => ({
-      title: item.title,
+    const articles = json.slice(0, 8).map((item) => ({
+      title: item.headline,
       summary: item.summary || '',
       source: item.source || '',
       url: item.url,
-      publishedAt: item.time_published
-        ? formatAlphaVantageDate(item.time_published)
+      publishedAt: item.datetime
+        ? new Date(item.datetime * 1000).toISOString()
         : new Date().toISOString(),
     }))
 
-    return { symbol: symbol.toUpperCase(), articles }
+    const result = { symbol: upper, articles }
+    setCache(cacheKey, result)
+    return result
   } catch {
-    return stubArticles(symbol)
+    return stubArticles(upper)
   }
-}
-
-function formatAlphaVantageDate(raw) {
-  // Alpha Vantage format: 20260228T143000
-  const y = raw.slice(0, 4)
-  const m = raw.slice(4, 6)
-  const d = raw.slice(6, 8)
-  const h = raw.slice(9, 11)
-  const min = raw.slice(11, 13)
-  const s = raw.slice(13, 15)
-
-  return `${y}-${m}-${d}T${h}:${min}:${s}Z`
 }

@@ -1,14 +1,35 @@
 import { useState } from 'react'
 import { useWatchlist } from '../hooks/useWatchlist'
+import { normalizeTicker } from '../utils/tickerSymbols'
+
+const TICKER_RE = /^[A-Z]{1,5}$/
 
 export function WatchlistPage() {
   const { symbols, loading, error, addSymbol, removeSymbol, moveSymbol } =
     useWatchlist()
   const [input, setInput] = useState('')
+  const [validationError, setValidationError] = useState('')
 
   async function handleAdd(event) {
     event.preventDefault()
-    await addSymbol(input)
+    const raw = input.trim().toUpperCase()
+
+    if (!TICKER_RE.test(raw)) {
+      setValidationError(
+        'Enter a 1–5 letter ticker symbol (e.g. AAPL, LMT, SPY). Full company names are not supported.',
+      )
+      return
+    }
+
+    const ticker = normalizeTicker(raw)
+
+    if (symbols.includes(ticker)) {
+      setValidationError(`${ticker} is already in your watchlist.`)
+      return
+    }
+
+    setValidationError('')
+    await addSymbol(ticker)
     setInput('')
   }
 
@@ -32,6 +53,7 @@ export function WatchlistPage() {
         </button>
       </form>
 
+      {validationError && <p className="error-text">{validationError}</p>}
       {error && <p className="error-text">{error}</p>}
 
       {symbols.length === 0 ? (

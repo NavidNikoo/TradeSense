@@ -30,7 +30,7 @@ export function LoginPage() {
 
   return (
     <section className="auth-page">
-      <Link to='/homepage'>Back</Link>
+      <Link to="/">Back</Link>
       <h1>Welcome to TradeSense</h1>
       <p className="muted-label">
         {location.state?.message || 'Sign in to access your dashboard.'}
