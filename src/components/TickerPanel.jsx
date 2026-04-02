@@ -39,8 +39,19 @@ export function TickerPanel({ symbol, onSnapshot }) {
         if (historyResult.status === 'fulfilled') {
           setHistory(historyResult.value.history)
         } else {
-          // Non-fatal: keep rendering live quote if chart API is rate-limited.
-          setHistory([])
+          // Non-fatal: sparkline from prior close → current when Yahoo history fails (e.g. 429).
+          const pc = quoteData.previousClose
+          if (pc != null && pc > 0 && quoteData.price != null) {
+            setHistory([
+              { date: 'Prior close', close: pc },
+              {
+                date: quoteData.updatedAt || 'Now',
+                close: quoteData.price,
+              },
+            ])
+          } else {
+            setHistory([])
+          }
         }
 
         if (newsResult.status === 'fulfilled') {
@@ -102,7 +113,7 @@ export function TickerPanel({ symbol, onSnapshot }) {
   }
 
   return (
-    <div className="ticker-panel">
+    <div className="ticker-panel" id={`ticker-panel-${(quote?.symbol || symbol).replace(/[^a-z0-9]/gi, '-')}`}>
       <div className="ticker-header">
         <span className="ticker-symbol">{quote?.symbol || symbol}</span>
         <span className="ticker-price">

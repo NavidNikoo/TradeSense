@@ -106,6 +106,8 @@ export async function getQuote(symbol) {
     symbol: upper,
     price: json.c,
     changePercent: json.dp != null ? +json.dp.toFixed(2) : 0,
+    /** Prior regular-session close (Finnhub `pc`) — used for chart fallback when daily history API fails */
+    previousClose: json.pc != null && json.pc > 0 ? json.pc : undefined,
     updatedAt: json.t
       ? new Date(json.t * 1000).toISOString().slice(0, 10)
       : new Date().toISOString().slice(0, 10),

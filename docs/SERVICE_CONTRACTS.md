@@ -4,7 +4,7 @@ These interfaces keep frontend components decoupled from provider-specific APIs.
 
 ## MarketDataService
 
-- `getQuote(symbol: string): Promise<{ symbol: string; price: number; changePercent?: number; updatedAt?: string }>`
+- `getQuote(symbol: string): Promise<{ symbol: string; price: number; changePercent?: number; updatedAt?: string; previousClose?: number }>`
 - `getHistory(symbol: string, range: string): Promise<{ symbol: string; history: { date: string; close: number }[] }>`
 
 ## NewsService

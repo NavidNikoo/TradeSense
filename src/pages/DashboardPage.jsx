@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { useWatchlist } from '../hooks/useWatchlist'
 import { useAuth } from '../contexts/AuthContext'
 import { TickerPanel } from '../components/TickerPanel'
+import { DashboardTickerStrip } from '../components/DashboardTickerStrip'
 import { saveSnapshot } from '../services/timeLapseService'
 
 export function DashboardPage() {
@@ -43,6 +44,7 @@ export function DashboardPage() {
   return (
     <section>
       <h2>Dashboard</h2>
+      <DashboardTickerStrip symbols={symbols} />
       <div className="dashboard-grid">
         {symbols.slice(0, 10).map((sym) => (
           <TickerPanel key={sym} symbol={sym} onSnapshot={handleSnapshot} />

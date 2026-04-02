@@ -338,6 +338,50 @@ input {
   border-color: #7c3aed;
 }
 
+/* --- Dashboard ticker strip (watchlist tape) --- */
+
+.dashboard-ticker-strip {
+  background-color: #111827;
+  color: #e5e7eb;
+  border-radius: 0.5rem;
+  padding: 0.65rem 0.85rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  border: 1px solid #1f2937;
+}
+
+.dashboard-ticker-strip-inner {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 1.35rem;
+  align-items: center;
+  min-height: 2rem;
+}
+
+.dashboard-ticker-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+  font-size: 0.9rem;
+}
+
+.dashboard-ticker-symbol {
+  color: #ffffff;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.dashboard-ticker-price {
+  color: #e5e7eb;
+  font-weight: 600;
+}
+
+.dashboard-ticker-item--loading {
+  opacity: 0.75;
+}
+
 .dashboard-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
