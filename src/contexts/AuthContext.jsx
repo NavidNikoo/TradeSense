@@ -4,6 +4,7 @@ import {
   onAuthStateChanged,
   signInWithEmailAndPassword,
   signOut,
+  updateProfile
 } from 'firebase/auth'
 import { auth } from '../firebase/config'
 
@@ -14,8 +15,13 @@ export function AuthProvider({ children }) {
   const [authReady, setAuthReady] = useState(false)
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
-      setUser(currentUser)
+    const unsubscribe = onAuthStateChanged(auth, async (currentUser) => {
+      if (currentUser) {
+        await currentUser.reload()
+        setUser({ ...currentUser })
+      } else {
+        setUser(null)
+      }
       setAuthReady(true)
     })
 
@@ -26,8 +32,14 @@ export function AuthProvider({ children }) {
     () => ({
       user,
       authReady,
-      signUp: (email, password) =>
-        createUserWithEmailAndPassword(auth, email, password),
+      signUp: async (email, password, fname, lname) => {
+        const userCredential = await createUserWithEmailAndPassword(auth, email, password)
+        await updateProfile(userCredential.user, {
+          displayName: `${fname} ${lname}`,
+        })
+        setUser({ ...userCredential.user })
+        return userCredential
+      },
       signIn: (email, password) => signInWithEmailAndPassword(auth, email, password),
       signOutUser: () => signOut(auth),
     }),

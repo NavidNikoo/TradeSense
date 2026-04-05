@@ -16,11 +16,16 @@ export function AppLayout() {
       </aside>
 
       <div className="main-column">
-        <header className="topbar">
-          <div>
-            <p className="muted-label">Signed in as</p>
-            <p className="user-email">{user?.email}</p>
+        <header className="topbar" style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+            <div>
+              <p className="muted-label">Signed in as</p>
+              <p className="user-email">{user?.email}</p>
+            </div>
           </div>
+            <h1 className="name-display" style={{ position: 'absolute', left: '57%', transform: 'translateX(-50%)' }}>
+              Welcome {user?.displayName ?? 'User'}
+            </h1>
           <button type="button" onClick={signOutUser}>
             Log out
           </button>

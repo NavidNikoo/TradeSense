@@ -4,6 +4,8 @@ import { useAuth } from '../contexts/AuthContext'
 
 export function SignupPage() {
   const { user, signUp } = useAuth()
+  const [ fname, setFname ] = useState('')
+  const [ lname, setLname ] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -16,6 +18,7 @@ export function SignupPage() {
 
   async function handleSubmit(event) {
     event.preventDefault()
+    console.log('handleSubmit fired', { email, password, fname, lname })
     setError('')
 
     if (password !== confirmPassword) {
@@ -31,7 +34,8 @@ export function SignupPage() {
     setLoading(true)
 
     try {
-      await signUp(email, password)
+      console.log('calling signUp...')
+      await signUp(email, password, fname, lname)
     } catch (authError) {
       setError(authError.message)
     } finally {
@@ -45,6 +49,26 @@ export function SignupPage() {
       <h1>Create your account</h1>
       <p className="muted-label">Set up TradeSense in minutes.</p>
       <form className="auth-form" onSubmit={handleSubmit}>
+      <div style={{ display: 'flex', gap:'1rem' }}>
+        <label style={{ flex: 1 }}>
+          First Name
+          <input 
+            type="text"
+            value={fname}
+            onChange={(event) => setFname(event.target.value)}
+            style={{ width:'100%' }}
+          />
+        </label>
+        <label style={{ flex: 1 }}>
+          Last Name
+          <input 
+            type="lname"
+            value={lname}
+            onChange={(event) => setLname(event.target.value)}
+            style={{ width: '100%' }}
+          />
+        </label>
+      </div>
         <label>
           Email
           <input
