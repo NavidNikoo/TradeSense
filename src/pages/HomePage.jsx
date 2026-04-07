@@ -1,121 +1,150 @@
-import NavBar from "../components/NavBar"
-import ChartingTool from "../photos/ChartingTool.jpeg"
-import NewsSources from "../photos/NewsSources.jpeg"
-import SocialMedia from "../photos/SocialMedia.jpeg"
-import Dashboard from "../photos/Dashboard.jpeg"
-import Watchlist from "../photos/Watchlist.jpeg"
-import TimeLapse from "../photos/Sentiment Time-Lapse.jpeg"
-
-const borderStyle = {
-    border:'1px solid black',
-    borderRadius: '8px',
-    flex: 1,
-    padding: '1rem'
-}
-
-const titleStyle = {
-    fontSize: '3rem',
-    marginBottom: '-15px'
-}
-
-const sectionStyle = {
-    display: 'flex',
-    gap: '2rem',
-    paddingLeft: '5rem',
-    paddingRight: '5rem',
-    alignItems: 'stretch'
-}
-
-const photoStyle = {
-    width: '100%',
-    height: '250px',
-    objectFit: 'contain'
-}
-
-const textCenter = {
-    textAlign: 'center'
-}
+import { Link } from 'react-router-dom';
+import DashboardImg from '../photos/Dashboard.jpeg';
 
 export function HomePage() {
-    return (
-        <nav style={{ paddingBottom: '5rem' }}>
-            <NavBar />
-            <div style={ textCenter }>
-                <h1 style={ titleStyle }>Welcome to TradeSense</h1>
-                <h2>Trading Learning Made Easy</h2>
-                <p style={{ wordWrap:'break-word', overflowWrap:'break-word', maxWidth:'600px', textAlign:'center', margin:'0 auto', paddingBottom:'25px' }}>
-                    TradeSense is a free intelligent tool that allows new users to understand and learn 
-                    market behavior without the hassle. Learning the ropes in trading can be overwhelming, 
-                    complicated and can be time consuming. TradeSense takes away the pain and makes it easy for 
-                    new traders to understand makret behavior and makes it easier for well-seasoned traders to reinforce
-                    their own understanding.
-                </p>
-            </div>
-            <section style={ sectionStyle }>
-                <div style={ borderStyle }>
-                    <img src={ NewsSources } style={ photoStyle } />
-                    <h1 style={ textCenter }><b>News Sources</b></h1>
-                    <p style={ textCenter }>
-                        Understand market behavior based on big news sources. Let the news outlets come to you with 
-                        important trading information and TradeSense will display how news behavior impacts the current
-                        market.
-                    </p>
-                </div>
-                <div style={ borderStyle }>
-                    <img src={ SocialMedia } style={ photoStyle }/>
-                    <h1 style={ textCenter }><b>Social Media</b></h1>
-                    <p style={ textCenter }>
-                        Understand market behavior based on multiple social media platforms. TradeSense will analyze 
-                        expert opinions and public statements to save you time and headaches from analyzing everything
-                        yourself.
-                    </p>
-                </div>
-                <div style={ borderStyle }>
-                    <img src={ ChartingTool } style={ photoStyle }/>
-                    <h1 style={ textCenter }><b>Charting Tools</b></h1>
-                    <p style={ textCenter }>
-                        Don't understand charting tools? Not to worry! TradeSense uses complex charting tools 
-                        and creates a basic charting tool that is easy to read and easier to understand.
-                    </p>
-                </div>
-            </section>
-            <div style={{ textAlign:'center', alignItems:'center', paddingBottom:'2rem' }}>
-                <h1 style={ titleStyle }>TradeSense from the Inside</h1>
-            </div>
-            <section style={ sectionStyle }>
-                <div style={ borderStyle }>
-                    <img src={ Dashboard } style={ photoStyle } />
-                    <h1 style={ textCenter }><b>Dashboard</b></h1>
-                    <p style={ textCenter }>
-                        The Dashboard welcomes you and saves your previous stock watchlist as soon as you log in.
-                        No need to be overwhelmed with all of the stock options, rather you choose which stock you want
-                        to watch. The Dashboard allows each stock to show up with current price per stock, an increase
-                        or decrease percentage, a simple stock chart with dates and price points and current news articles 
-                        with an impact rating that drive the understanding of market behavior to you.
-                    </p>
-                </div>
-                <div style={ borderStyle }>
-                    <img src={ Watchlist } style={ photoStyle } />
-                    <h1 style = { textCenter }><b>Watchlist</b></h1>
-                    <p style={ textCenter }>
-                        The Watchlist allows you to search most stocks that you want to watch. Just search up the stock name 
-                        or company name and it will appear in your list. You can search up companies, cryptocurrency and much more.
-                        The arrows towards the right side of the stock allows you add stock importance towards the top of the list.
-                        You can easily remove stock watches with ease.
-                    </p>
-                </div>
-                <div style={ borderStyle }>
-                    <img src={ TimeLapse } style={ photoStyle } />
-                    <h1 style={ textCenter }><b>Sentiment Time-Lapse</b></h1>
-                    <p style={ textCenter }>
-                        The Sentiment Time-Lapse allows you to dive deeper into a stock and understand its behavior in order for you
-                        to have a better understaning of the stock. News sources, social media and expert charting tools help explain the behavior of
-                        your wacthed stock, but our Sentiment Time-Lapse allows you to understand behaviors without being overwhelmed
-                        with hundreds of different news sources and thousands of professional opinions. TradeSense allows you to understand 
-                        the most important opinions in your own TradeSense account.
-                    </p>
-                </div>
-            </section>
-        </nav>
-    )
+  return (
+    <div className="landing-page">
+      {/* ---- Nav ---- */}
+      <nav className="landing-nav">
+        <Link className="landing-nav-brand" to="/">TradeSense</Link>
+        <div className="landing-nav-links">
+          <a className="landing-nav-link" href="#features">Features</a>
+          <a className="landing-nav-link" href="#product">Product</a>
+          <Link className="landing-nav-link" to="/login">Log in</Link>
+          <Link className="landing-nav-cta" to="/signup">Sign up free</Link>
+        </div>
+      </nav>
+
+      {/* ---- Hero ---- */}
+      <header className="landing-hero">
+        <h1 className="landing-headline">
+          Understand market behavior<br />
+          <span className="landing-headline-accent">before you trade</span>
+        </h1>
+
+        <p className="landing-subheadline">
+          TradeSense combines real-time stock data, company news, and AI-powered
+          sentiment analysis so new traders can learn the ropes — and seasoned
+          ones can reinforce their edge.
+        </p>
+
+        <div className="landing-cta-row">
+          <Link className="landing-cta-primary" to="/signup">
+            Get started &mdash; it&rsquo;s free &rarr;
+          </Link>
+          <Link className="landing-cta-secondary" to="/login">
+            Log in
+          </Link>
+        </div>
+      </header>
+
+      {/* ---- Product showcase ---- */}
+      <section className="landing-showcase" id="product">
+        <div className="landing-mock">
+          <img
+            className="landing-mock-img"
+            src={DashboardImg}
+            alt="TradeSense dashboard showing ticker panels, price charts, and sentiment analysis"
+          />
+        </div>
+      </section>
+
+      <hr className="landing-divider" />
+
+      {/* ---- Features ---- */}
+      <section id="features">
+        <div className="landing-section-header">
+          <span className="landing-section-kicker">Features</span>
+          <h2 className="landing-section-title">
+            Everything you need to read the market
+          </h2>
+          <p className="landing-section-body">
+            A focused toolkit that pulls together price action, headlines, and
+            sentiment — no information overload, no paid tiers.
+          </p>
+        </div>
+
+        <div className="landing-features">
+          <div className="landing-feature">
+            <div className="landing-feature-icon" aria-hidden="true">&#128200;</div>
+            <h3>Live Quotes &amp; Charts</h3>
+            <p>
+              Real-time prices from Finnhub and interactive historical charts
+              with multiple time ranges — from intraday to yearly.
+            </p>
+          </div>
+
+          <div className="landing-feature">
+            <div className="landing-feature-icon" aria-hidden="true">&#128240;</div>
+            <h3>Company News</h3>
+            <p>
+              Latest headlines pulled directly from Finnhub, surfaced alongside
+              each stock so you see what&rsquo;s moving the price.
+            </p>
+          </div>
+
+          <div className="landing-feature">
+            <div className="landing-feature-icon" aria-hidden="true">&#129504;</div>
+            <h3>AI Sentiment Scoring</h3>
+            <p>
+              Every article is scored by a FinBERT language model — positive,
+              negative, or neutral — so you don&rsquo;t have to read them all.
+            </p>
+          </div>
+
+          <div className="landing-feature">
+            <div className="landing-feature-icon" aria-hidden="true">&#128203;</div>
+            <h3>Personal Watchlist</h3>
+            <p>
+              Add the tickers you care about, reorder by priority, and see
+              everything at a glance on your dashboard.
+            </p>
+          </div>
+
+          <div className="landing-feature">
+            <div className="landing-feature-icon" aria-hidden="true">&#9200;</div>
+            <h3>Sentiment Time-Lapse</h3>
+            <p>
+              Snapshot a stock&rsquo;s price and sentiment, then review how both
+              evolved over days or weeks on a dual-axis timeline.
+            </p>
+          </div>
+
+          <div className="landing-feature">
+            <div className="landing-feature-icon" aria-hidden="true">&#128274;</div>
+            <h3>Completely Free</h3>
+            <p>
+              No credit card, no premium tier. Sign up with an email and start
+              exploring the market immediately.
+            </p>
+          </div>
+        </div>
+      </section>
+
+      {/* ---- Built-with strip ---- */}
+      <div className="landing-strip">
+        <span className="landing-strip-label">Built with</span>
+        <div className="landing-strip-row">
+          <span className="landing-strip-item">React</span>
+          <span className="landing-strip-item">Firebase</span>
+          <span className="landing-strip-item">Finnhub</span>
+          <span className="landing-strip-item">Hugging Face</span>
+          <span className="landing-strip-item">Recharts</span>
+        </div>
+      </div>
+
+      {/* ---- Footer ---- */}
+      <footer className="landing-footer">
+        &copy; {new Date().getFullYear()} TradeSense &middot; CPSC&nbsp;491
+        Senior Capstone &middot;{' '}
+        <a
+          href="https://github.com"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub
+        </a>
+      </footer>
+    </div>
+  );
 }
