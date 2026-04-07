@@ -1,67 +1,76 @@
-import { useEffect, useState } from 'react'
-import { ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip } from 'recharts'
-import { getQuote, getHistory } from '../services/marketDataService'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { Link } from 'react-router-dom'
+import {
+  ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart,
+} from 'recharts'
+import { getQuote, getHistory, AVAILABLE_RANGES, ChartError } from '../services/marketDataService'
 import { getNews } from '../services/newsService'
 import { scoreArticles } from '../services/sentimentService'
 
-export function TickerPanel({ symbol, onSnapshot }) {
+const RANGE_LABELS = {
+  '1d': '1D', '5d': '5D', '1m': '1M', '3m': '3M',
+  '6m': '6M', '1y': '1Y', 'ytd': 'YTD',
+}
+
+const DEBOUNCE_MS = 550
+
+function ChartTooltip({ active, payload }) {
+  if (!active || !payload?.[0]) return null
+  const { date, close } = payload[0].payload
+  return (
+    <div className="chart-tooltip">
+      <strong>{date}</strong>
+      <div>${close?.toFixed(2)}</div>
+    </div>
+  )
+}
+
+export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, expanded, onToggleExpand }) {
   const [quote, setQuote] = useState(null)
-  const [history, setHistory] = useState([])
+  const [newsError, setNewsError] = useState(null)
   const [articles, setArticles] = useState([])
   const [sentiment, setSentiment] = useState(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
+  // Chart state — only populated when expanded
+  const [selectedRange, setSelectedRange] = useState('1m')
+  const [chartData, setChartData] = useState([])
+  const [chartLoading, setChartLoading] = useState(false)
+  const [chartError, setChartError] = useState(null)
+  const [chartErrorKind, setChartErrorKind] = useState(null)
+
+  const [saveStatus, setSaveStatus] = useState(null) // 'saving' | 'saved' | 'error'
+  const saveTimerRef = useRef(null)
+  const debounceRef = useRef(null)
+  const autoRetried = useRef(false)
+  const chartLoadSeqRef = useRef(0)
+
+  // --- Initial load: quote + news only (no chart for collapsed cards) ---
   useEffect(() => {
     let cancelled = false
     setLoading(true)
     setError(null)
-    setHistory([])
+    setNewsError(null)
     setArticles([])
     setSentiment(null)
 
     async function load() {
       try {
-        // Quote is required for the card; history/news are optional enhancements.
         const quoteData = await getQuote(symbol)
-
         if (cancelled) return
-
         setQuote(quoteData)
+        onQuoteLoaded?.(quoteData)
 
-        const [historyResult, newsResult] = await Promise.allSettled([
-          getHistory(symbol, '1m'),
-          getNews(symbol),
-        ])
-
+        const newsResult = await getNews(symbol).catch((err) => ({ _err: err }))
         if (cancelled) return
 
-        if (historyResult.status === 'fulfilled') {
-          setHistory(historyResult.value.history)
+        if (newsResult._err) {
+          setNewsError(newsResult._err.message || 'News unavailable')
         } else {
-          // Non-fatal: sparkline from prior close → current when Yahoo history fails (e.g. 429).
-          const pc = quoteData.previousClose
-          if (pc != null && pc > 0 && quoteData.price != null) {
-            setHistory([
-              { date: 'Prior close', close: pc },
-              {
-                date: quoteData.updatedAt || 'Now',
-                close: quoteData.price,
-              },
-            ])
-          } else {
-            setHistory([])
-          }
-        }
-
-        if (newsResult.status === 'fulfilled') {
-          setArticles(newsResult.value.articles)
-          const sentimentData = await scoreArticles(newsResult.value.articles)
+          setArticles(newsResult.articles)
+          const sentimentData = await scoreArticles(newsResult.articles)
           if (!cancelled) setSentiment(sentimentData)
-        } else {
-          // Non-fatal: show quote even when news API has intermittent issues.
-          setArticles([])
-          setSentiment(null)
         }
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -72,19 +81,80 @@ export function TickerPanel({ symbol, onSnapshot }) {
 
     load()
     return () => { cancelled = true }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [symbol])
+
+  // --- Chart loader (called on expand or range change) ---
+  const loadChart = useCallback(async (range) => {
+    const seq = ++chartLoadSeqRef.current
+    setChartLoading(true)
+    setChartError(null)
+    setChartErrorKind(null)
+    try {
+      const result = await getHistory(symbol, range)
+      if (seq !== chartLoadSeqRef.current) return
+      setChartData(result.history)
+      autoRetried.current = false
+    } catch (err) {
+      if (seq !== chartLoadSeqRef.current) return
+      const kind = err instanceof ChartError ? err.kind : 'unknown'
+      setChartError(err.message)
+      setChartErrorKind(kind)
+      setChartData([])
+
+      // One automatic retry on first rate_limited error for this expand session
+      if (kind === 'rate_limited' && !autoRetried.current) {
+        autoRetried.current = true
+        setTimeout(() => loadChart(range), 3000)
+      }
+    } finally {
+      if (seq === chartLoadSeqRef.current) setChartLoading(false)
+    }
+  }, [symbol])
+
+  // --- Load chart when panel expands ---
+  useEffect(() => {
+    if (expanded && chartData.length === 0 && !chartLoading && !chartError) {
+      loadChart('1m')
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [expanded])
+
+  function handleRangeClick(range) {
+    if (range === selectedRange) return
+    setSelectedRange(range)
+    clearTimeout(debounceRef.current)
+    debounceRef.current = setTimeout(() => loadChart(range), DEBOUNCE_MS)
+  }
+
+  useEffect(() => {
+    return () => { clearTimeout(debounceRef.current); clearTimeout(saveTimerRef.current) }
+  }, [])
+
+  function handleExpand() {
+    if (!expanded) {
+      onToggleExpand?.(symbol)
+      setSelectedRange('1m')
+      autoRetried.current = false
+    } else {
+      onToggleExpand?.(null)
+    }
+  }
 
   if (loading) {
     return (
-      <div className="ticker-panel ticker-loading">
-        Loading {symbol}...
+      <div className="ticker-panel ticker-skeleton" id={`ticker-panel-${symbol.replace(/[^a-z0-9]/gi, '-')}`}>
+        <div className="skeleton-line skeleton-title" />
+        <div className="skeleton-line skeleton-chart" />
+        <div className="skeleton-line skeleton-text" />
+        <div className="skeleton-line skeleton-text short" />
       </div>
     )
   }
 
   if (error) {
     return (
-      <div className="ticker-panel ticker-error">
+      <div className="ticker-panel ticker-error" id={`ticker-panel-${symbol.replace(/[^a-z0-9]/gi, '-')}`}>
         Failed to load {symbol}: {error}
       </div>
     )
@@ -96,75 +166,284 @@ export function TickerPanel({ symbol, onSnapshot }) {
       ? 'change-negative'
       : 'change-neutral'
 
+  const chartColor = quote?.changePercent >= 0 ? '#16a34a' : '#dc2626'
+
   const sentimentClass = sentiment?.aggregate
     ? `sentiment-${sentiment.aggregate.label}`
     : 'sentiment-neutral'
 
-  function handleSnapshot() {
-    if (!onSnapshot || !quote || !sentiment) return
-    onSnapshot({
-      symbol,
-      sentimentSummary: sentiment.aggregate,
-      priceSnapshot: {
-        close: quote.price,
-        changePercent: quote.changePercent,
-      },
-    })
+  const hasDayRange = quote?.high != null && quote?.low != null
+
+  const dollarChange =
+    quote?.previousClose != null && quote?.price != null
+      ? quote.price - quote.previousClose
+      : null
+
+  const showFallbackChart = Boolean(
+    chartError
+    && quote?.previousClose != null
+    && quote?.price != null
+    && (chartErrorKind === 'rate_limited' || chartErrorKind === 'no_data'),
+  )
+
+  async function handleSnapshot() {
+    if (!onSnapshot || !quote) return
+    setSaveStatus('saving')
+    clearTimeout(saveTimerRef.current)
+    try {
+      await onSnapshot({
+        symbol,
+        sentimentSummary: sentiment?.aggregate ?? { label: 'unknown', score: 0 },
+        priceSnapshot: {
+          close: quote.price,
+          changePercent: quote.changePercent,
+        },
+      })
+      setSaveStatus('saved')
+    } catch {
+      setSaveStatus('error')
+    }
+    saveTimerRef.current = setTimeout(() => setSaveStatus(null), 3000)
   }
 
+  const panelId = `ticker-panel-${(quote?.symbol || symbol).replace(/[^a-z0-9]/gi, '-')}`
+
   return (
-    <div className="ticker-panel" id={`ticker-panel-${(quote?.symbol || symbol).replace(/[^a-z0-9]/gi, '-')}`}>
-      <div className="ticker-header">
-        <span className="ticker-symbol">{quote?.symbol || symbol}</span>
-        <span className="ticker-price">
-          ${quote?.price?.toFixed(2)}{' '}
-          <span className={changeClass}>
-            ({quote?.changePercent > 0 ? '+' : ''}{quote?.changePercent?.toFixed(2)}%)
-          </span>
-        </span>
+    <div className={`ticker-panel ${expanded ? 'ticker-panel--expanded' : ''}`} id={panelId}>
+      <div className="ticker-panel-top">
+        <div className="ticker-hero">
+          <p className="ticker-exchange">US · {quote?.symbol || symbol}</p>
+          <div className="ticker-price-row">
+            <span className="ticker-price-main">${quote?.price?.toFixed(2)}</span>
+            <span className="ticker-change-pill">
+              <span className={changeClass}>
+                {dollarChange != null && (
+                  <>
+                    {dollarChange >= 0 ? '+' : ''}
+                    ${Math.abs(dollarChange).toFixed(2)}
+                    {' '}
+                  </>
+                )}
+                ({quote?.changePercent > 0 ? '+' : ''}{quote?.changePercent?.toFixed(2)}%)
+              </span>
+            </span>
+          </div>
+          {quote?.updatedAt && (
+            <p className="ticker-asof">As of {quote.updatedAt}</p>
+          )}
+        </div>
+        <button
+          type="button"
+          className="expand-btn expand-btn--toolbar"
+          onClick={handleExpand}
+          aria-expanded={expanded}
+          aria-controls={`${panelId}-chart`}
+        >
+          {expanded ? 'Collapse' : 'Chart'}
+        </button>
       </div>
 
-      {history.length > 0 && (
-        <div className="ticker-chart">
-          <ResponsiveContainer width="100%" height={140}>
-            <LineChart data={history}>
-              <XAxis
-                dataKey="date"
-                tick={{ fontSize: 10 }}
-                interval="preserveStartEnd"
-              />
-              <YAxis
-                domain={['auto', 'auto']}
-                tick={{ fontSize: 10 }}
-                width={50}
-              />
-              <Tooltip />
-              <Line
-                type="monotone"
-                dataKey="close"
-                stroke="#2563eb"
-                dot={false}
-                strokeWidth={2}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+      {hasDayRange && !expanded && (
+        <div className="ticker-stats-strip">
+          <div className="ticker-stat-cell">
+            <span className="ticker-stat-label">Day range</span>
+            <span className="ticker-stat-value">${quote.low.toFixed(2)} – ${quote.high.toFixed(2)}</span>
+          </div>
+          {quote.open != null && (
+            <div className="ticker-stat-cell">
+              <span className="ticker-stat-label">Open</span>
+              <span className="ticker-stat-value">${quote.open.toFixed(2)}</span>
+            </div>
+          )}
+          {quote.previousClose != null && (
+            <div className="ticker-stat-cell">
+              <span className="ticker-stat-label">Prev close</span>
+              <span className="ticker-stat-value">${quote.previousClose.toFixed(2)}</span>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* --- Expanded: full chart with range selector --- */}
+      {expanded && (
+        <div className="ticker-expanded-section" id={`${panelId}-chart`}>
+          <div className="ticker-range-bar" role="tablist" aria-label="Chart range">
+            {AVAILABLE_RANGES.map((r) => (
+              <button
+                key={r}
+                type="button"
+                role="tab"
+                aria-selected={selectedRange === r}
+                className={`range-btn ${selectedRange === r ? 'range-btn--active' : ''}`}
+                onClick={() => handleRangeClick(r)}
+                disabled={chartLoading}
+              >
+                {RANGE_LABELS[r]}
+              </button>
+            ))}
+          </div>
+
+          {chartError && !chartLoading && (
+            <div className={`ticker-alert ${chartErrorKind === 'rate_limited' ? 'ticker-alert--warn' : 'ticker-alert--info'}`}>
+              <strong>
+                {chartErrorKind === 'rate_limited' ? 'Rate limited' : 'Chart unavailable'}
+              </strong>
+              <span className="ticker-alert-row">
+                {chartErrorKind === 'rate_limited'
+                  ? 'Too many chart requests — wait a moment and retry.'
+                  : chartError}
+                <button type="button" className="retry-btn" onClick={() => { autoRetried.current = false; loadChart(selectedRange) }}>
+                  Retry
+                </button>
+              </span>
+            </div>
+          )}
+
+          <div className="ticker-chart ticker-chart--expanded">
+            {chartLoading ? (
+              <div className="expanded-chart-loading">
+                <div className="skeleton-line skeleton-chart-lg" />
+              </div>
+            ) : chartData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <AreaChart data={chartData}>
+                  <defs>
+                    <linearGradient id={`grad-${panelId}`} x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="0%" stopColor={chartColor} stopOpacity={0.18} />
+                      <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" vertical={false} />
+                  <XAxis
+                    dataKey="date"
+                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                    interval="preserveStartEnd"
+                    tickLine={false}
+                  />
+                  <YAxis
+                    domain={['auto', 'auto']}
+                    tick={{ fontSize: 11, fill: '#6b7280' }}
+                    width={56}
+                    tickLine={false}
+                    axisLine={false}
+                    orientation="right"
+                  />
+                  <Tooltip content={<ChartTooltip />} />
+                  <Area
+                    type="monotone"
+                    dataKey="close"
+                    stroke={chartColor}
+                    strokeWidth={2}
+                    fill={`url(#grad-${panelId})`}
+                    dot={false}
+                    activeDot={{ r: 4, strokeWidth: 0 }}
+                  />
+                </AreaChart>
+              </ResponsiveContainer>
+            ) : showFallbackChart ? (
+              <>
+                <p className="ticker-fallback-label">
+                  {RANGE_LABELS[selectedRange] || selectedRange} history unavailable
+                  {chartErrorKind === 'rate_limited' ? ' (rate limited)' : ''}.
+                  Showing session move only: prior close vs current price — not the full range.
+                </p>
+                <ResponsiveContainer width="100%" height={160}>
+                  <AreaChart data={[
+                    { date: 'Prev close', close: quote.previousClose },
+                    { date: 'Current', close: quote.price },
+                  ]}>
+                    <defs>
+                      <linearGradient id={`grad-fb-${panelId}`} x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor={chartColor} stopOpacity={0.12} />
+                        <stop offset="100%" stopColor={chartColor} stopOpacity={0} />
+                      </linearGradient>
+                    </defs>
+                    <XAxis
+                      dataKey="date"
+                      tick={{ fontSize: 11, fill: '#9ca3af' }}
+                      tickLine={false}
+                      axisLine={false}
+                    />
+                    <YAxis
+                      domain={['auto', 'auto']}
+                      tick={{ fontSize: 11, fill: '#9ca3af' }}
+                      width={56}
+                      tickLine={false}
+                      axisLine={false}
+                      orientation="right"
+                    />
+                    <Tooltip content={<ChartTooltip />} />
+                    <Area
+                      type="monotone"
+                      dataKey="close"
+                      stroke={chartColor}
+                      strokeWidth={2}
+                      fill={`url(#grad-fb-${panelId})`}
+                      dot={{ r: 4, fill: chartColor, strokeWidth: 0 }}
+                    />
+                  </AreaChart>
+                </ResponsiveContainer>
+              </>
+            ) : !chartError ? (
+              <p className="ticker-inline-error">No chart data available</p>
+            ) : (
+              <p className="ticker-inline-error">Chart could not be loaded. Try Retry or collapse and expand.</p>
+            )}
+          </div>
+
+          <div className="ticker-stats-grid ticker-stats-grid--expanded">
+            {quote?.open != null && (
+              <div className="ticker-stat">
+                <span className="ticker-stat-label">Open</span>
+                <span className="ticker-stat-value">${quote.open.toFixed(2)}</span>
+              </div>
+            )}
+            {quote?.high != null && (
+              <div className="ticker-stat">
+                <span className="ticker-stat-label">High</span>
+                <span className="ticker-stat-value">${quote.high.toFixed(2)}</span>
+              </div>
+            )}
+            {quote?.low != null && (
+              <div className="ticker-stat">
+                <span className="ticker-stat-label">Low</span>
+                <span className="ticker-stat-value">${quote.low.toFixed(2)}</span>
+              </div>
+            )}
+            {quote?.previousClose != null && (
+              <div className="ticker-stat">
+                <span className="ticker-stat-label">Prev close</span>
+                <span className="ticker-stat-value">${quote.previousClose.toFixed(2)}</span>
+              </div>
+            )}
+            {hasDayRange && (
+              <div className="ticker-stat">
+                <span className="ticker-stat-label">Day range</span>
+                <span className="ticker-stat-value">${quote.low.toFixed(2)} – ${quote.high.toFixed(2)}</span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {sentiment?.aggregate && (
-        <div style={{ margin: '0.5rem 0' }}>
-          <span className="ticker-section-title">Sentiment </span>
+        <div className="ticker-block ticker-block--sentiment">
+          <span className="ticker-section-title">Sentiment</span>
           <span className={`sentiment-badge ${sentimentClass}`}>
             {sentiment.aggregate.label} ({sentiment.aggregate.score})
           </span>
         </div>
       )}
 
+      {newsError && articles.length === 0 && (
+        <p className="ticker-inline-error">{newsError}</p>
+      )}
+
       {articles.length > 0 && (
-        <>
-          <p className="ticker-section-title">Recent News</p>
+        <div className="ticker-block ticker-block--news">
+          <p className="ticker-section-title">Recent news</p>
           <ul className="news-list">
-            {articles.slice(0, 5).map((article, i) => (
+            {articles.slice(0, expanded ? 10 : 5).map((article, i) => (
               <li key={i} className="news-item">
                 <a href={article.url} target="_blank" rel="noreferrer">
                   {article.title}
@@ -179,13 +458,29 @@ export function TickerPanel({ symbol, onSnapshot }) {
               </li>
             ))}
           </ul>
-        </>
+        </div>
       )}
 
-      {onSnapshot && (
-        <button type="button" className="snapshot-btn" onClick={handleSnapshot}>
-          Save to Time-Lapse
-        </button>
+      {onSnapshot && quote && (
+        <>
+          <button
+            type="button"
+            className={`snapshot-btn ${saveStatus === 'saved' ? 'snapshot-btn--saved' : ''} ${saveStatus === 'error' ? 'snapshot-btn--error' : ''}`}
+            onClick={handleSnapshot}
+            disabled={saveStatus === 'saving'}
+          >
+            {saveStatus === 'saving' ? 'Saving…'
+              : saveStatus === 'saved' ? 'Saved!'
+              : saveStatus === 'error' ? 'Save failed — retry?'
+              : 'Save to Time-Lapse'}
+          </button>
+
+          {saveStatus === 'saved' && (
+            <p className="snapshot-hint">
+              Snapshot added. <Link to="/time-lapse">View in Time-Lapse</Link>
+            </p>
+          )}
+        </>
       )}
     </div>
   )

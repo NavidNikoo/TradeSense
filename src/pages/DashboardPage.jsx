@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Link } from 'react-router-dom'
 import { useWatchlist } from '../hooks/useWatchlist'
 import { useAuth } from '../contexts/AuthContext'
@@ -5,30 +6,81 @@ import { TickerPanel } from '../components/TickerPanel'
 import { DashboardTickerStrip } from '../components/DashboardTickerStrip'
 import { saveSnapshot } from '../services/timeLapseService'
 
+const STAGGER_MS = 80
+
 export function DashboardPage() {
   const { user } = useAuth()
   const { symbols, loading } = useWatchlist()
 
-  async function handleSnapshot(data) {
-    if (!user) return
+  const [sortBy, setSortBy] = useState('default')
+  const [quoteMap, setQuoteMap] = useState({})
+  const [visibleCount, setVisibleCount] = useState(0)
+  const [expandedSymbol, setExpandedSymbol] = useState(null)
 
-    try {
-      await saveSnapshot(user.uid, data.symbol, {
-        sentimentSummary: data.sentimentSummary,
-        priceSnapshot: data.priceSnapshot,
+  const displaySymbols = useMemo(() => {
+    const list = symbols.slice(0, 10)
+    if (sortBy === 'alpha') return [...list].sort()
+    if (sortBy === 'change') {
+      return [...list].sort((a, b) => {
+        const ca = quoteMap[a]?.changePercent ?? 0
+        const cb = quoteMap[b]?.changePercent ?? 0
+        return cb - ca
       })
-    } catch {
-      // Snapshot save failed silently for now
     }
+    return list
+  }, [symbols, sortBy, quoteMap])
+
+  useEffect(() => {
+    if (loading || symbols.length === 0) return
+    setVisibleCount(0)
+    const total = Math.min(symbols.length, 10)
+    const timers = []
+    for (let i = 0; i < total; i++) {
+      timers.push(setTimeout(() => setVisibleCount((c) => Math.max(c, i + 1)), i * STAGGER_MS))
+    }
+    return () => timers.forEach(clearTimeout)
+  }, [symbols, loading])
+
+  const handleToggleExpand = useCallback((sym) => {
+    setExpandedSymbol((prev) => (prev === sym ? null : sym))
+  }, [])
+
+  function handleQuoteLoaded(sym, data) {
+    setQuoteMap((prev) => {
+      if (prev[sym]?.changePercent === data?.changePercent) return prev
+      return { ...prev, [sym]: data }
+    })
+  }
+
+  async function handleSnapshot(data) {
+    if (!user) throw new Error('Not signed in')
+    await saveSnapshot(user.uid, data.symbol, {
+      sentimentSummary: data.sentimentSummary,
+      priceSnapshot: data.priceSnapshot,
+    })
   }
 
   if (loading) {
-    return <p className="centered-text">Loading dashboard...</p>
+    return (
+      <section className="dashboard-wrapper">
+        <h2>Dashboard</h2>
+        <div className="dashboard-grid">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="ticker-panel ticker-skeleton">
+              <div className="skeleton-line skeleton-title" />
+              <div className="skeleton-line skeleton-chart" />
+              <div className="skeleton-line skeleton-text" />
+              <div className="skeleton-line skeleton-text short" />
+            </div>
+          ))}
+        </div>
+      </section>
+    )
   }
 
   if (symbols.length === 0) {
     return (
-      <section className="empty-dashboard">
+      <section className="dashboard-wrapper empty-dashboard">
         <h2>Dashboard</h2>
         <p className="muted-label">
           Your watchlist is empty. Add symbols to see sentiment and price data
@@ -41,13 +93,57 @@ export function DashboardPage() {
     )
   }
 
+  const upCount = Object.values(quoteMap).filter((q) => q?.changePercent > 0).length
+  const downCount = Object.values(quoteMap).filter((q) => q?.changePercent < 0).length
+  const flatCount = Object.keys(quoteMap).length - upCount - downCount
+
   return (
-    <section>
-      <h2>Dashboard</h2>
+    <section className="dashboard-wrapper">
+      <div className="dashboard-header">
+        <h2>Dashboard</h2>
+        <div className="dashboard-controls">
+          {Object.keys(quoteMap).length > 0 && (
+            <span className="dashboard-summary">
+              {symbols.length} symbol{symbols.length !== 1 ? 's' : ''}
+              {upCount > 0 && <span className="change-positive"> · {upCount} up</span>}
+              {downCount > 0 && <span className="change-negative"> · {downCount} down</span>}
+              {flatCount > 0 && <span className="change-neutral"> · {flatCount} flat</span>}
+            </span>
+          )}
+          <select
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value)}
+            className="dashboard-sort-select"
+            aria-label="Sort symbols"
+          >
+            <option value="default">Watchlist order</option>
+            <option value="alpha">A → Z</option>
+            <option value="change">% Change ↓</option>
+          </select>
+        </div>
+      </div>
+
       <DashboardTickerStrip symbols={symbols} />
+
       <div className="dashboard-grid">
-        {symbols.slice(0, 10).map((sym) => (
-          <TickerPanel key={sym} symbol={sym} onSnapshot={handleSnapshot} />
+        {displaySymbols.map((sym, i) => (
+          i < visibleCount ? (
+            <TickerPanel
+              key={sym}
+              symbol={sym}
+              expanded={expandedSymbol === sym}
+              onToggleExpand={handleToggleExpand}
+              onSnapshot={handleSnapshot}
+              onQuoteLoaded={(data) => handleQuoteLoaded(sym, data)}
+            />
+          ) : (
+            <div key={sym} className="ticker-panel ticker-skeleton">
+              <div className="skeleton-line skeleton-title" />
+              <div className="skeleton-line skeleton-chart" />
+              <div className="skeleton-line skeleton-text" />
+              <div className="skeleton-line skeleton-text short" />
+            </div>
+          )
         ))}
       </div>
     </section>
