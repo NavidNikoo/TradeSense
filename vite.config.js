@@ -11,20 +11,8 @@ export default defineConfig({
   server: {
     proxy: {
       '/api/chart': {
-        target: 'https://query1.finance.yahoo.com',
+        target: 'http://localhost:3001',
         changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/api\/chart/, '/v8/finance/chart'),
-      },
-    },
-  },
-  preview: {
-    proxy: {
-      '/api/chart': {
-        target: 'https://query1.finance.yahoo.com',
-        changeOrigin: true,
-        secure: true,
-        rewrite: (path) => path.replace(/^\/api\/chart/, '/v8/finance/chart'),
       },
     },
   },
