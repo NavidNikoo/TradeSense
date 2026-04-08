@@ -1,7 +1,4 @@
-/**
- * Translates Firebase auth error codes into user-friendly messages
- * Also provides recovery suggestions for better UX
- */
+
 
 export function getAuthErrorMessage(error) {
   const code = error.code || error.message;
