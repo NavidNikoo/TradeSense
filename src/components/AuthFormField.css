@@ -1,0 +1,232 @@
+
+
+.auth-field-wrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  margin: 0;
+}
+
+.auth-field-wrapper.has-error {
+  animation: shake 0.4s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-4px); }
+  75% { transform: translateX(4px); }
+}
+
+.auth-field-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.auth-field-label {
+  display: block;
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: #9ca3af;
+  letter-spacing: 0.01em;
+}
+
+.required-indicator {
+  color: #ef4444;
+  margin-left: 0.2rem;
+}
+
+.password-toggle {
+  background: none;
+  border: none;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  font-size: 1rem;
+  color: #6b7280;
+  transition: color 0.15s;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 28px;
+  min-height: 28px;
+}
+
+.password-toggle:hover {
+  color: #9ca3af;
+  background-color: rgba(75, 85, 99, 0.2);
+}
+
+.password-toggle:focus {
+  outline: 2px solid #3b82f6;
+  outline-offset: 2px;
+}
+
+.auth-field-input-wrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.auth-field-input {
+  width: 100%;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.95rem;
+  color: #f3f4f6;
+  background: #0a0a0a;
+  border: 1px solid #374151;
+  border-radius: 0.55rem;
+  outline: none;
+  transition: all 0.15s;
+}
+
+.auth-field-input:hover {
+  border-color: #4b5563;
+}
+
+.auth-field-input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.auth-field-input.input-error {
+  border-color: #dc2626;
+  background-color: rgba(220, 38, 38, 0.05);
+}
+
+.auth-field-input.input-error:focus {
+  border-color: #dc2626;
+  box-shadow: 0 0 0 3px rgba(220, 38, 38, 0.15);
+}
+
+.password-visibility-indicator {
+  position: absolute;
+  right: 0.85rem;
+  font-size: 0.75rem;
+  color: #6b7280;
+  pointer-events: none;
+  font-weight: 500;
+}
+
+/* Password Strength Indicator */
+.strength-indicator {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  padding: 0.5rem 0;
+}
+
+.strength-bar {
+  width: 100%;
+  height: 4px;
+  background: #1f2937;
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.strength-fill {
+  width: 33%;
+  height: 100%;
+  border-radius: 2px;
+  transition: width 0.3s ease, background-color 0.3s ease;
+}
+
+.strength-fill-weak {
+  width: 33%;
+  background-color: #ef4444;
+}
+
+.strength-fill-fair {
+  width: 66%;
+  background-color: #f59e0b;
+}
+
+.strength-fill-good {
+  width: 85%;
+  background-color: #3b82f6;
+}
+
+.strength-fill-strong {
+  width: 100%;
+  background-color: #10b981;
+}
+
+.strength-text {
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: #9ca3af;
+}
+
+.strength-indicator.strength-weak .strength-text {
+  color: #ef4444;
+}
+
+.strength-indicator.strength-fair .strength-text {
+  color: #f59e0b;
+}
+
+.strength-indicator.strength-good .strength-text {
+  color: #3b82f6;
+}
+
+.strength-indicator.strength-strong .strength-text {
+  color: #10b981;
+}
+
+/* Error and Hint Text */
+.auth-field-error {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.82rem;
+  color: #fca5a5;
+  background: rgba(220, 38, 38, 0.08);
+  border-left: 2px solid #dc2626;
+  border-radius: 0.3rem;
+  animation: slideInError 0.3s ease-out;
+}
+
+.auth-field-hint {
+  margin: 0;
+  padding: 0.5rem 0.6rem;
+  font-size: 0.82rem;
+  color: #9ca3af;
+  background: rgba(59, 130, 246, 0.08);
+  border-left: 2px solid #3b82f6;
+  border-radius: 0.3rem;
+}
+
+@keyframes slideInError {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Accessible focus states */
+.auth-field-input:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  background-color: #111111;
+}
+
+/* Mobile responsive */
+@media (max-width: 480px) {
+  .auth-field-label {
+    font-size: 0.78rem;
+  }
+
+  .auth-field-input {
+    padding: 0.55rem 0.65rem;
+    font-size: 0.9rem;
+  }
+
+  .password-toggle {
+    min-width: 24px;
+    min-height: 24px;
+  }
+}
