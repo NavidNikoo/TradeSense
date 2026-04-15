@@ -7,10 +7,19 @@ import { DashboardTickerStrip } from '../components/DashboardTickerStrip'
 import { saveSnapshot } from '../services/timeLapseService'
 
 const STAGGER_MS = 80
+const HINT_KEY = 'tradesense_first_run_dismissed'
 
 export function DashboardPage() {
   const { user } = useAuth()
   const { symbols, loading } = useWatchlist()
+  const [hintDismissed, setHintDismissed] = useState(
+    () => localStorage.getItem(HINT_KEY) === '1',
+  )
+
+  function dismissHint() {
+    setHintDismissed(true)
+    localStorage.setItem(HINT_KEY, '1')
+  }
 
   const [sortBy, setSortBy] = useState('default')
   const [quoteMap, setQuoteMap] = useState({})
@@ -122,6 +131,24 @@ export function DashboardPage() {
           </select>
         </div>
       </div>
+
+      {!hintDismissed && symbols.length > 0 && symbols.length <= 3 && (
+        <div className="dashboard-hint">
+          <p>
+            <strong>Tip:</strong> Add more symbols on the{' '}
+            <Link to="/watchlist">Watchlist</Link> page, then expand any card
+            to see full charts, news, and sentiment.
+          </p>
+          <button
+            className="dashboard-hint-close"
+            type="button"
+            onClick={dismissHint}
+            aria-label="Dismiss tip"
+          >
+            &times;
+          </button>
+        </div>
+      )}
 
       <DashboardTickerStrip symbols={symbols} />
 

@@ -5,6 +5,11 @@ These interfaces keep frontend components decoupled from provider-specific APIs.
 ## MarketDataService
 
 - `getQuote(symbol: string): Promise<{ symbol: string; price: number; changePercent?: number; updatedAt?: string; previousClose?: number; open?: number; high?: number; low?: number }>`
+- `searchSymbols(query: string): Promise<{ symbol: string; description: string; type: string }[]>`
+  - Finnhub `GET /search?q=…` for company name or partial ticker autocomplete (Watchlist).
+  - Prepends curated **index ETF hints** (e.g. SPY / VOO / IVV for “S&P 500”, QQQ for Nasdaq-100) when the query matches common phrases, merged with API results and deduped by symbol.
+  - Returns only symbols matching `/^[A-Z]{1,5}$/` so they align with watchlist validation.
+  - Uses the same in-memory cache TTL as quotes. If the API key is missing or the request fails, **hints may still be returned** when the query matches; otherwise returns `[]` on empty input.
 - `getHistory(symbol: string, range: string): Promise<{ symbol: string; history: { date: string; close: number }[] }>`
   - `range` is one of `'1d' | '5d' | '1m' | '3m' | '6m' | '1y' | 'ytd'`.
   - Client retries up to 2× on HTTP 429/503 with exponential backoff.

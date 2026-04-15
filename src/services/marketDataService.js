@@ -160,6 +160,185 @@ async function fetchChartHistory(upper, range = '1m') {
   return { symbol: upper, history }
 }
 
+// --- Symbol search (Finnhub) — watchlist autocomplete ---
+
+/** Popular index / benchmark ETFs — surfaced when the query looks like an index search. */
+const INDEX_ETF_HINTS = [
+  {
+    symbol: 'SPY',
+    description: 'SPDR S&P 500 ETF — tracks the S&P 500 Index',
+    type: 'ETF',
+  },
+  {
+    symbol: 'VOO',
+    description: 'Vanguard S&P 500 ETF — tracks the S&P 500 Index',
+    type: 'ETF',
+  },
+  {
+    symbol: 'IVV',
+    description: 'iShares Core S&P 500 ETF — tracks the S&P 500 Index',
+    type: 'ETF',
+  },
+  {
+    symbol: 'QQQ',
+    description: 'Invesco QQQ — tracks the Nasdaq-100 Index',
+    type: 'ETF',
+  },
+  {
+    symbol: 'DIA',
+    description: 'SPDR Dow Jones Industrial Average ETF',
+    type: 'ETF',
+  },
+  {
+    symbol: 'IWM',
+    description: 'iShares Russell 2000 ETF — US small-cap index',
+    type: 'ETF',
+  },
+]
+
+/**
+ * When the user types things like "S&P 500", "sp500", or "nasdaq", suggest the right ETFs.
+ */
+function indexFundHintsForQuery(query) {
+  const q = String(query).trim()
+  if (q.length < 2) return []
+
+  const u = q.toUpperCase()
+  const alnum = u.replace(/[^A-Z0-9]/g, '')
+
+  const out = []
+  const addGroup = (symbols) => {
+    for (const sym of symbols) {
+      const row = INDEX_ETF_HINTS.find((h) => h.symbol === sym)
+      if (row) out.push({ ...row })
+    }
+  }
+
+  const sp500 =
+    alnum.includes('SP500') ||
+    alnum.includes('SPY') ||
+    alnum.includes('VOO') ||
+    alnum.includes('IVV') ||
+    u.includes('S&P') ||
+    u.includes('S & P') ||
+    (alnum.includes('SNP') && alnum.includes('500')) ||
+    /\bS\s*&\s*P\b/i.test(q) ||
+    /S\s+P\s+500/i.test(u)
+
+  if (sp500) {
+    addGroup(['SPY', 'VOO', 'IVV'])
+  }
+
+  const nasdaq =
+    alnum.includes('QQQ') ||
+    alnum.includes('NASDAQ100') ||
+    alnum.includes('NDX100') ||
+    (u.includes('NASDAQ') && (alnum.includes('100') || alnum.includes('NDX')))
+
+  if (nasdaq) {
+    addGroup(['QQQ'])
+  }
+
+  const dow =
+    alnum.includes('DIA') ||
+    (u.includes('DOW') && (u.includes('JONES') || alnum.includes('DJIA')))
+
+  if (dow) {
+    addGroup(['DIA'])
+  }
+
+  const russell =
+    alnum.includes('IWM') ||
+    (alnum.includes('RUSSELL') && alnum.includes('2000'))
+
+  if (russell) {
+    addGroup(['IWM'])
+  }
+
+  const deduped = []
+  const seen = new Set()
+  for (const row of out) {
+    if (seen.has(row.symbol)) continue
+    seen.add(row.symbol)
+    deduped.push(row)
+  }
+  return deduped
+}
+
+/**
+ * Search symbols by company name or partial ticker (Finnhub /search).
+ * Merges curated index-ETF hints (S&P 500, Nasdaq-100, etc.) with API results.
+ * Returns only symbols matching /^[A-Z]{1,5}$/ so they work with the watchlist validator.
+ */
+export async function searchSymbols(query) {
+  const q = String(query).trim()
+  if (q.length < 1) return []
+
+  const hints = indexFundHintsForQuery(q)
+
+  if (!FINNHUB_KEY) {
+    return hints.slice(0, 12)
+  }
+
+  const cacheKey = `symsearch:${q.toLowerCase()}`
+  const cached = getCached(cacheKey)
+  if (cached) return cached
+
+  const url = `${FINNHUB_BASE}/search?q=${encodeURIComponent(q)}&token=${FINNHUB_KEY}`
+  const res = await fetch(url)
+
+  if (res.status === 429 || res.status === 503) {
+    const merged = mergeHintsWithApi(hints, [])
+    setCache(cacheKey, merged)
+    return merged
+  }
+  if (!res.ok) {
+    const merged = mergeHintsWithApi(hints, [])
+    setCache(cacheKey, merged)
+    return merged
+  }
+
+  const json = await res.json()
+  const list = Array.isArray(json.result) ? json.result : []
+  const apiRows = []
+  const seen = new Set()
+
+  for (const row of list) {
+    const sym = (row.displaySymbol || row.symbol || '').toUpperCase()
+    if (!/^[A-Z]{1,5}$/.test(sym)) continue
+    if (seen.has(sym)) continue
+    seen.add(sym)
+    apiRows.push({
+      symbol: sym,
+      description: row.description ? String(row.description).trim() : sym,
+      type: row.type ? String(row.type) : '',
+    })
+    if (apiRows.length >= 12) break
+  }
+
+  const merged = mergeHintsWithApi(hints, apiRows)
+  setCache(cacheKey, merged)
+  return merged
+}
+
+function mergeHintsWithApi(hints, apiRows) {
+  const merged = []
+  const seen = new Set()
+
+  for (const row of hints) {
+    if (seen.has(row.symbol)) continue
+    seen.add(row.symbol)
+    merged.push(row)
+  }
+  for (const row of apiRows) {
+    if (seen.has(row.symbol)) continue
+    seen.add(row.symbol)
+    merged.push(row)
+    if (merged.length >= 14) break
+  }
+  return merged
+}
+
 // --- Public API ---
 
 export const AVAILABLE_RANGES = ['1d', '5d', '1m', '3m', '6m', '1y', 'ytd']
