@@ -3,6 +3,7 @@ const { defineSecret } = require("firebase-functions/params");
 const admin = require("firebase-admin");
 
 const openaiKey = defineSecret("OPENAI_API_KEY");
+const huggingfaceKey = defineSecret("HUGGINGFACE_API_KEY");
 
 if (!admin.apps.length) {
   admin.initializeApp();
@@ -199,6 +200,85 @@ function parseRequestBody(req) {
   }
   return null;
 }
+
+// ---------------------------------------------------------------------------
+// FinBERT proxy (server-side HF key, solves browser CORS block)
+// ---------------------------------------------------------------------------
+
+// NOTE: `api-inference.huggingface.co` was decommissioned in late 2025.
+// The new HF Inference provider lives behind this router URL.
+const HF_FINBERT_URL = "https://router.huggingface.co/hf-inference/models/ProsusAI/finbert";
+const FINBERT_MAX_INPUTS = 50;
+const FINBERT_MAX_INPUT_LEN = 1000;
+
+exports.finbertProxy = onRequest(
+  {
+    cors: true,
+    region: "us-central1",
+    secrets: [huggingfaceKey],
+    invoker: "public",
+    timeoutSeconds: 30,
+    memory: "256MiB",
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      return res.status(204).send("");
+    }
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    const apiKey = process.env.HUGGINGFACE_API_KEY;
+    if (!apiKey || !String(apiKey).trim()) {
+      return res.status(503).json({
+        error:
+          "Server is not configured with HUGGINGFACE_API_KEY. Run: firebase functions:secrets:set HUGGINGFACE_API_KEY && firebase deploy --only functions",
+      });
+    }
+
+    const payload = parseRequestBody(req);
+    if (!payload || !Array.isArray(payload.inputs) || payload.inputs.length === 0) {
+      return res.status(400).json({ error: "Expected JSON body { inputs: string[] }." });
+    }
+    if (payload.inputs.length > FINBERT_MAX_INPUTS) {
+      return res.status(400).json({ error: `Too many inputs (max ${FINBERT_MAX_INPUTS}).` });
+    }
+
+    const inputs = payload.inputs.map((x) => String(x || "").slice(0, FINBERT_MAX_INPUT_LEN));
+
+    try {
+      const upstream = await fetch(HF_FINBERT_URL, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
+          "Content-Type": "application/json",
+          Accept: "application/json",
+        },
+        body: JSON.stringify({ inputs }),
+      });
+
+      const text = await upstream.text();
+      if (!upstream.ok) {
+        console.error("HF error", upstream.status, text.slice(0, 500));
+        return res.status(upstream.status === 401 || upstream.status === 403 ? 503 : 502).json({
+          error:
+            upstream.status === 401 || upstream.status === 403
+              ? "HuggingFace API key is missing or invalid. Re-set HUGGINGFACE_API_KEY secret."
+              : "HuggingFace inference error. See function logs.",
+        });
+      }
+
+      try {
+        return res.json(JSON.parse(text));
+      } catch {
+        return res.status(502).json({ error: "Invalid response from HuggingFace." });
+      }
+    } catch (e) {
+      console.error("finbertProxy fetch", e.message);
+      return res.status(502).json({ error: "Failed to reach HuggingFace." });
+    }
+  },
+);
 
 exports.timeLapseChatHttp = onRequest(
   {

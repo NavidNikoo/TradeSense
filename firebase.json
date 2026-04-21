@@ -27,6 +27,12 @@
         }
       },
       {
+        "source": "/api/finbert",
+        "function": {
+          "functionId": "finbertProxy"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

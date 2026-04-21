@@ -1,10 +1,12 @@
 import { Link, NavLink, Outlet } from 'react-router-dom'
 import { useAuth } from '../contexts/AuthContext'
 import { useTheme } from '../contexts/ThemeContext'
+import { useAlertEvents } from '../hooks/useAlertEvents'
 
 export function AppLayout() {
   const { user, signOutUser } = useAuth()
   const { theme, toggleTheme } = useTheme()
+  const { unreadCount } = useAlertEvents()
 
   return (
     <div className="app-shell">
@@ -14,6 +16,14 @@ export function AppLayout() {
           <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/watchlist">Watchlist</NavLink>
           <NavLink to="/time-lapse">Time-Lapse</NavLink>
+          <NavLink to="/alerts" className="app-nav-alerts">
+            Alerts
+            {unreadCount > 0 && (
+              <span className="app-nav-badge" aria-label={`${unreadCount} unread alerts`}>
+                {unreadCount > 9 ? '9+' : unreadCount}
+              </span>
+            )}
+          </NavLink>
           <NavLink to="/settings">Settings</NavLink>
         </nav>
         <div className="app-nav-right">

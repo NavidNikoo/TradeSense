@@ -1,6 +1,11 @@
-const HF_KEY = import.meta.env.VITE_HUGGINGFACE_API_KEY
-const MODEL = 'ProsusAI/finbert'
-const HF_URL = `https://api-inference.huggingface.co/models/${MODEL}`
+// The HuggingFace inference endpoint cannot be called from a browser
+// (CORS is not enabled on api-inference.huggingface.co), so we always go
+// through our server-side proxy at `/api/finbert`:
+//   • localhost dev → proxy.cjs (port 3001) via Vite proxy
+//   • production    → finbertProxy Cloud Function via Firebase Hosting rewrite
+// The HF API key lives on the server; the browser never sees it.
+
+const FINBERT_URL = '/api/finbert'
 
 function stubScore() {
   const labels = ['positive', 'neutral', 'negative']
@@ -32,49 +37,70 @@ function aggregate(perArticle) {
   }
 }
 
+function stubResult(articles, source) {
+  const perArticle = articles.map(() => stubScore())
+  return { perArticle, aggregate: aggregate(perArticle), source }
+}
+
+/**
+ * Score an array of news articles with FinBERT via our server-side proxy.
+ *
+ * Returns `{ perArticle, aggregate, source }` where `source` is one of:
+ *   'live'              FinBERT scored the articles successfully.
+ *   'stub-no-key'       Proxy reported HF key is missing (503).
+ *   'stub-api-error'    Proxy/HF returned a non-OK status.
+ *   'stub-fetch-error'  Network or parsing failure.
+ *   'empty'             No articles to score.
+ */
 export async function scoreArticles(articles) {
   if (!articles || articles.length === 0) {
-    return { perArticle: [], aggregate: { label: 'neutral', score: 0 } }
+    return { perArticle: [], aggregate: { label: 'neutral', score: 0 }, source: 'empty' }
   }
 
-  if (!HF_KEY) {
-    const perArticle = articles.map(() => stubScore())
-    return { perArticle, aggregate: aggregate(perArticle) }
+  const inputs = articles.map((a) => (a.summary ? `${a.title}. ${a.summary}` : a.title))
+
+  let res
+  try {
+    res = await fetch(FINBERT_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      // `top_k: null` tells the new HF router to return the full label
+      // distribution per input (positive / neutral / negative) instead of
+      // only the single top label.
+      body: JSON.stringify({ inputs, parameters: { top_k: null } }),
+    })
+  } catch {
+    return stubResult(articles, 'stub-fetch-error')
+  }
+
+  if (res.status === 503) {
+    return stubResult(articles, 'stub-no-key')
+  }
+  if (!res.ok) {
+    return stubResult(articles, 'stub-api-error')
+  }
+
+  let json
+  try {
+    json = await res.json()
+  } catch {
+    return stubResult(articles, 'stub-fetch-error')
+  }
+
+  if (!Array.isArray(json) || json.length !== articles.length) {
+    return stubResult(articles, 'stub-api-error')
   }
 
   try {
-    const inputs = articles.map((a) =>
-      a.summary ? `${a.title}. ${a.summary}` : a.title,
-    )
-
-    const res = await fetch(HF_URL, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${HF_KEY}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({ inputs }),
-    })
-
-    if (!res.ok) {
-      const perArticle = articles.map(() => stubScore())
-      return { perArticle, aggregate: aggregate(perArticle) }
-    }
-
-    const json = await res.json()
-
     const perArticle = json.map((resultSet) => {
-      // Each result is an array of [{label, score}, ...] sorted by score desc
       const top = Array.isArray(resultSet) ? resultSet[0] : resultSet
       return {
-        label: top.label.toLowerCase(),
-        score: +top.score.toFixed(3),
+        label: String(top.label).toLowerCase(),
+        score: +Number(top.score).toFixed(3),
       }
     })
-
-    return { perArticle, aggregate: aggregate(perArticle) }
+    return { perArticle, aggregate: aggregate(perArticle), source: 'live' }
   } catch {
-    const perArticle = articles.map(() => stubScore())
-    return { perArticle, aggregate: aggregate(perArticle) }
+    return stubResult(articles, 'stub-api-error')
   }
 }

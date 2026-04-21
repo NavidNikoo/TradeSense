@@ -24,6 +24,17 @@ service cloud.firestore {
                     && request.resource.data.symbol.size() <= 10;
     }
 
+    match /alerts/{alertId} {
+      allow read, update, delete: if request.auth != null
+                                  && resource.data.userId == request.auth.uid;
+
+      allow create: if request.auth != null
+                    && request.resource.data.userId == request.auth.uid
+                    && request.resource.data.keys().hasAll(['userId', 'symbol', 'type', 'enabled'])
+                    && request.resource.data.symbol is string
+                    && request.resource.data.symbol.size() <= 10;
+    }
+
     match /{document=**} {
       allow read, write: if false;
     }

@@ -1,11 +1,14 @@
-import { useEffect, useState, useCallback, useRef } from 'react'
+import { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import { Link } from 'react-router-dom'
 import {
   ResponsiveContainer, XAxis, YAxis, Tooltip, CartesianGrid, Area, AreaChart,
+  ComposedChart, Line, Legend,
 } from 'recharts'
 import { getQuote, getHistory, AVAILABLE_RANGES, ChartError } from '../services/marketDataService'
 import { getNews } from '../services/newsService'
 import { scoreArticles } from '../services/sentimentService'
+import { enrichChartData, summarizeIndicators } from '../utils/technicalIndicators'
+import { buildSentimentExplanation } from '../utils/sentimentExplanation'
 
 const RANGE_LABELS = {
   '1d': '1D', '5d': '5D', '1m': '1M', '3m': '3M',
@@ -16,16 +19,34 @@ const DEBOUNCE_MS = 550
 
 function ChartTooltip({ active, payload }) {
   if (!active || !payload?.[0]) return null
-  const { date, close } = payload[0].payload
+  const row = payload[0].payload
+  const { date, close, sma20, sma50, rsi14 } = row
   return (
     <div className="chart-tooltip">
       <strong>{date}</strong>
-      <div>${close?.toFixed(2)}</div>
+      {close != null && <div>Price: ${close.toFixed(2)}</div>}
+      {sma20 != null && <div>SMA 20: ${sma20.toFixed(2)}</div>}
+      {sma50 != null && <div>SMA 50: ${sma50.toFixed(2)}</div>}
+      {rsi14 != null && <div>RSI 14: {rsi14.toFixed(1)}</div>}
     </div>
   )
 }
 
-export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, expanded, onToggleExpand }) {
+function formatRsiLabel(zone) {
+  if (zone === 'overbought') return 'Overbought'
+  if (zone === 'oversold') return 'Oversold'
+  if (zone === 'neutral') return 'Neutral'
+  return 'Unavailable'
+}
+
+function formatVolTierLabel(tier) {
+  if (tier === 'low') return 'Low'
+  if (tier === 'medium') return 'Medium'
+  if (tier === 'high') return 'High'
+  return 'Unavailable'
+}
+
+export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, expanded, onToggleExpand }) {
   const [quote, setQuote] = useState(null)
   const [newsError, setNewsError] = useState(null)
   const [articles, setArticles] = useState([])
@@ -45,6 +66,29 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, expanded, onTog
   const debounceRef = useRef(null)
   const autoRetried = useRef(false)
   const chartLoadSeqRef = useRef(0)
+
+  // Derived values (must live above any early returns to keep hook order stable)
+  const enrichedChart = useMemo(() => enrichChartData(chartData), [chartData])
+  const indicators = useMemo(() => summarizeIndicators(enrichedChart), [enrichedChart])
+  const sentimentExplanation = useMemo(
+    () => buildSentimentExplanation({ articles, sentiment, symbol }),
+    [articles, sentiment, symbol],
+  )
+
+  // Emit a consolidated data snapshot whenever the inputs change so parents
+  // can evaluate market alerts. Runs on every meaningful update; the parent
+  // is responsible for dedup/cooldown logic.
+  useEffect(() => {
+    if (!onDataReady || !quote) return
+    onDataReady({
+      symbol,
+      price: quote?.price ?? null,
+      changePercent: quote?.changePercent ?? null,
+      rsi: indicators?.rsi ?? null,
+      sentimentLabel: sentiment?.aggregate?.label ?? null,
+    })
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [symbol, quote?.price, quote?.changePercent, indicators?.rsi, sentiment?.aggregate?.label])
 
   // --- Initial load: quote + news only (no chart for collapsed cards) ---
   useEffect(() => {
@@ -299,14 +343,47 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, expanded, onTog
             </div>
           )}
 
+          {indicators && (indicators.rsi != null || indicators.volatility != null) && (
+            <div className="ticker-indicators" aria-label="Technical indicators">
+              {indicators.rsi != null && (
+                <div className={`indicator-chip indicator-chip--rsi rsi-${indicators.rsiZone}`}>
+                  <span className="indicator-chip-label">RSI 14</span>
+                  <span className="indicator-chip-value">
+                    {indicators.rsi.toFixed(1)} · {formatRsiLabel(indicators.rsiZone)}
+                  </span>
+                </div>
+              )}
+              {indicators.sma20 != null && (
+                <div className="indicator-chip indicator-chip--sma sma-20">
+                  <span className="indicator-chip-label">SMA 20</span>
+                  <span className="indicator-chip-value">${indicators.sma20.toFixed(2)}</span>
+                </div>
+              )}
+              {indicators.sma50 != null && (
+                <div className="indicator-chip indicator-chip--sma sma-50">
+                  <span className="indicator-chip-label">SMA 50</span>
+                  <span className="indicator-chip-value">${indicators.sma50.toFixed(2)}</span>
+                </div>
+              )}
+              {indicators.volatility != null && (
+                <div className={`indicator-chip indicator-chip--vol vol-${indicators.volatilityTier}`}>
+                  <span className="indicator-chip-label">Volatility 20d</span>
+                  <span className="indicator-chip-value">
+                    {indicators.volatility.toFixed(2)}% · {formatVolTierLabel(indicators.volatilityTier)}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="ticker-chart ticker-chart--expanded">
             {chartLoading ? (
               <div className="expanded-chart-loading">
                 <div className="skeleton-line skeleton-chart-lg" />
               </div>
-            ) : chartData.length > 0 ? (
+            ) : enrichedChart.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
-                <AreaChart data={chartData}>
+                <ComposedChart data={enrichedChart}>
                   <defs>
                     <linearGradient id={`grad-${panelId}`} x1="0" y1="0" x2="0" y2="1">
                       <stop offset="0%" stopColor={chartColor} stopOpacity={0.18} />
@@ -329,7 +406,9 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, expanded, onTog
                     orientation="right"
                   />
                   <Tooltip content={<ChartTooltip />} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} iconType="plainline" />
                   <Area
+                    name="Price"
                     type="monotone"
                     dataKey="close"
                     stroke={chartColor}
@@ -338,7 +417,28 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, expanded, onTog
                     dot={false}
                     activeDot={{ r: 4, strokeWidth: 0 }}
                   />
-                </AreaChart>
+                  <Line
+                    name="SMA 20"
+                    type="monotone"
+                    dataKey="sma20"
+                    stroke="#2563eb"
+                    strokeWidth={1.5}
+                    dot={false}
+                    isAnimationActive={false}
+                    connectNulls
+                  />
+                  <Line
+                    name="SMA 50"
+                    type="monotone"
+                    dataKey="sma50"
+                    stroke="#a855f7"
+                    strokeWidth={1.5}
+                    strokeDasharray="4 3"
+                    dot={false}
+                    isAnimationActive={false}
+                    connectNulls
+                  />
+                </ComposedChart>
               </ResponsiveContainer>
             ) : showFallbackChart ? (
               <>
@@ -427,11 +527,52 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, expanded, onTog
       )}
 
       {sentiment?.aggregate && (
-        <div className="ticker-block ticker-block--sentiment">
-          <span className="ticker-section-title">Sentiment</span>
-          <span className={`sentiment-badge ${sentimentClass}`}>
-            {sentiment.aggregate.label} ({sentiment.aggregate.score})
-          </span>
+        <div className="ticker-sentiment">
+          <div className="ticker-block ticker-block--sentiment">
+            <span className="ticker-section-title">Sentiment</span>
+            <span className={`sentiment-badge ${sentimentClass}`}>
+              {sentiment.aggregate.label} ({sentiment.aggregate.score})
+            </span>
+            {sentimentExplanation?.modeLabel && (
+              <span
+                className={`sentiment-mode-chip sentiment-mode-chip--${sentimentExplanation.modeTone}`}
+                title="Where this score came from"
+              >
+                {sentimentExplanation.modeLabel}
+              </span>
+            )}
+          </div>
+
+          {sentimentExplanation && sentimentExplanation.lines.length > 0 && (
+            <ul className="sentiment-explanation">
+              {sentimentExplanation.lines.map((line, i) => (
+                <li key={i}>{line}</li>
+              ))}
+              {sentimentExplanation.dominantHeadline && (
+                <li className="sentiment-explanation-headline">
+                  Most influential headline:{' '}
+                  {sentimentExplanation.dominantHeadline.url ? (
+                    <a
+                      href={sentimentExplanation.dominantHeadline.url}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      {sentimentExplanation.dominantHeadline.title}
+                    </a>
+                  ) : (
+                    <span>{sentimentExplanation.dominantHeadline.title}</span>
+                  )}
+                  {sentimentExplanation.dominantHeadline.label && (
+                    <span
+                      className={`sentiment-badge sentiment-badge--inline sentiment-${sentimentExplanation.dominantHeadline.label}`}
+                    >
+                      {sentimentExplanation.dominantHeadline.label}
+                    </span>
+                  )}
+                </li>
+              )}
+            </ul>
+          )}
         </div>
       )}
 

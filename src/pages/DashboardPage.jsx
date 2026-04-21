@@ -2,9 +2,11 @@ import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useWatchlist } from '../hooks/useWatchlist'
 import { useAuth } from '../contexts/AuthContext'
+import { useAlertRules } from '../hooks/useAlertRules'
 import { TickerPanel } from '../components/TickerPanel'
 import { DashboardTickerStrip } from '../components/DashboardTickerStrip'
 import { saveSnapshot } from '../services/timeLapseService'
+import { evaluateRulesForSymbol } from '../utils/alertEvaluator'
 
 const STAGGER_MS = 80
 const HINT_KEY = 'tradesense_first_run_dismissed'
@@ -12,6 +14,9 @@ const HINT_KEY = 'tradesense_first_run_dismissed'
 export function DashboardPage() {
   const { user } = useAuth()
   const { symbols, loading, moveSymbol } = useWatchlist()
+  const { rules: alertRules } = useAlertRules()
+  const alertRulesRef = useRef(alertRules)
+  useEffect(() => { alertRulesRef.current = alertRules }, [alertRules])
   const [hintDismissed, setHintDismissed] = useState(
     () => localStorage.getItem(HINT_KEY) === '1',
   )
@@ -103,6 +108,16 @@ export function DashboardPage() {
       return { ...prev, [sym]: data }
     })
   }
+
+  const handleDataReady = useCallback((payload) => {
+    if (!user?.uid || !payload?.symbol) return
+    evaluateRulesForSymbol({
+      uid: user.uid,
+      rules: alertRulesRef.current,
+      symbol: payload.symbol,
+      data: payload,
+    })
+  }, [user?.uid])
 
   async function handleSnapshot(data) {
     if (!user) throw new Error('Not signed in')
@@ -215,6 +230,7 @@ export function DashboardPage() {
                 onToggleExpand={handleToggleExpand}
                 onSnapshot={handleSnapshot}
                 onQuoteLoaded={(data) => handleQuoteLoaded(sym, data)}
+                onDataReady={handleDataReady}
               />
               <div className="swap-btn-row">
                 <button

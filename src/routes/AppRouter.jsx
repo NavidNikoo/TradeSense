@@ -7,6 +7,7 @@ import { SignupPage } from '../pages/SignupPage'
 import { DashboardPage } from '../pages/DashboardPage'
 import { WatchlistPage } from '../pages/WatchlistPage'
 import { TimeLapsePage } from '../pages/TimeLapsePage'
+import { AlertsPage } from '../pages/AlertsPage'
 import { SettingsPage } from '../pages/SettingsPage'
 import { NotFoundPage } from '../pages/NotFoundPage'
 
@@ -23,6 +24,7 @@ export function AppRouter() {
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/watchlist" element={<WatchlistPage />} />
           <Route path="/time-lapse" element={<TimeLapsePage />} />
+          <Route path="/alerts" element={<AlertsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
         </Route>
       </Route>
