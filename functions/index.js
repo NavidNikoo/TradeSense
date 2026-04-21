@@ -1,4 +1,12 @@
 const { onRequest } = require("firebase-functions/v2/https");
+const { defineSecret } = require("firebase-functions/params");
+const admin = require("firebase-admin");
+
+const openaiKey = defineSecret("OPENAI_API_KEY");
+
+if (!admin.apps.length) {
+  admin.initializeApp();
+}
 
 const YAHOO_BASE = "https://query1.finance.yahoo.com/v8/finance/chart";
 
@@ -73,3 +81,174 @@ exports.chartProxy = onRequest({ cors: true, region: "us-central1" }, async (req
     return res.status(502).json({ error: err.message || "Failed to fetch chart data" });
   }
 });
+
+// ---------------------------------------------------------------------------
+// Time-Lapse AI Chat (HTTP + Bearer ID token — same pattern as chart proxy)
+// ---------------------------------------------------------------------------
+
+const OPENAI_CHAT_URL = "https://api.openai.com/v1/chat/completions";
+const MAX_USER_MSG_LEN = 2000;
+const MAX_SNAPSHOTS = 100;
+const MAX_CONVERSATION_TURNS = 20;
+
+function buildSystemPrompt(ctx) {
+  return [
+    "You are a concise stock-analysis assistant embedded in TradeSense's Time-Lapse feature.",
+    "You ONLY answer questions using the data provided below. Do NOT use outside knowledge for factual claims about this symbol's price or sentiment history.",
+    "If the data does not contain enough information to answer, say so honestly.",
+    "Politely refuse questions unrelated to the provided stock data with a one-sentence redirect.",
+    "Keep answers short (2-4 sentences unless the user asks for detail).",
+    "Always end with: \"This is not financial advice.\"",
+    "",
+    `Symbol: ${ctx.symbol}`,
+    `Date range: ${ctx.dateRange.from} to ${ctx.dateRange.to}`,
+    `Number of snapshots: ${ctx.snapshots.length}`,
+    "",
+    "Snapshot data (chronological):",
+    JSON.stringify(ctx.snapshots),
+    "",
+    ctx.ruleBasedInsights
+      ? `Rule-based insights already shown to the user:\nHeadline: ${ctx.ruleBasedInsights.headline}\nBullets: ${ctx.ruleBasedInsights.bullets.join(" | ")}`
+      : "",
+  ].join("\n");
+}
+
+/**
+ * @param {{ messages: unknown, context: unknown }} data
+ * @param {string} apiKey
+ * @returns {Promise<{ reply: string }>}
+ */
+async function executeTimeLapseChat(data, apiKey) {
+  const { messages, context } = data || {};
+
+  if (!context || !context.symbol || !Array.isArray(context.snapshots)) {
+    const err = new Error("Missing or invalid context.");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (!Array.isArray(messages) || messages.length === 0) {
+    const err = new Error("Messages array is required.");
+    err.statusCode = 400;
+    throw err;
+  }
+  if (context.snapshots.length > MAX_SNAPSHOTS) {
+    const err = new Error(`Too many snapshots (max ${MAX_SNAPSHOTS}).`);
+    err.statusCode = 400;
+    throw err;
+  }
+
+  const validRoles = new Set(["user", "assistant"]);
+  const trimmed = messages.slice(-MAX_CONVERSATION_TURNS).map((m) => ({
+    role: validRoles.has(m.role) ? m.role : "user",
+    content: String(m.content || "").slice(0, MAX_USER_MSG_LEN),
+  }));
+
+  const systemMsg = buildSystemPrompt(context);
+
+  const body = {
+    model: "gpt-4o-mini",
+    messages: [{ role: "system", content: systemMsg }, ...trimmed],
+    temperature: 0.4,
+    max_tokens: 512,
+  };
+
+  const res = await fetch(OPENAI_CHAT_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify(body),
+  });
+
+  const text = await res.text();
+  if (!res.ok) {
+    console.error("OpenAI error", res.status, text.slice(0, 500));
+    const err = new Error(
+      res.status === 401 || res.status === 403
+        ? "OpenAI API key is missing or invalid. Set the OPENAI_API_KEY secret and redeploy functions."
+        : "AI service error. Check the function logs for details.",
+    );
+    err.statusCode = 502;
+    throw err;
+  }
+
+  let json;
+  try {
+    json = JSON.parse(text);
+  } catch {
+    const err = new Error("Invalid response from AI service.");
+    err.statusCode = 502;
+    throw err;
+  }
+
+  const reply = json.choices?.[0]?.message?.content || "Sorry, I could not generate a response.";
+  return { reply };
+}
+
+function parseRequestBody(req) {
+  if (req.body && typeof req.body === "object" && !Buffer.isBuffer(req.body)) {
+    return req.body;
+  }
+  if (req.rawBody && req.rawBody.length) {
+    try {
+      return JSON.parse(req.rawBody.toString("utf8"));
+    } catch {
+      return null;
+    }
+  }
+  return null;
+}
+
+exports.timeLapseChatHttp = onRequest(
+  {
+    cors: true,
+    region: "us-central1",
+    secrets: [openaiKey],
+    invoker: "public",
+    timeoutSeconds: 120,
+    memory: "512MiB",
+  },
+  async (req, res) => {
+    if (req.method === "OPTIONS") {
+      return res.status(204).send("");
+    }
+    if (req.method !== "POST") {
+      return res.status(405).json({ error: "Method not allowed" });
+    }
+
+    const authHeader = req.headers.authorization || "";
+    const m = authHeader.match(/^Bearer\s+(.+)$/i);
+    if (!m) {
+      return res.status(401).json({ error: "Sign in required. Missing Authorization header." });
+    }
+
+    try {
+      await admin.auth().verifyIdToken(m[1]);
+    } catch (e) {
+      console.error("verifyIdToken", e.message);
+      return res.status(401).json({ error: "Invalid or expired session. Please sign in again." });
+    }
+
+    const payload = parseRequestBody(req);
+    if (!payload) {
+      return res.status(400).json({ error: "Expected JSON body with messages and context." });
+    }
+
+    const apiKey = process.env.OPENAI_API_KEY;
+    if (!apiKey || !String(apiKey).trim()) {
+      return res.status(503).json({
+        error:
+          "Server is not configured with OPENAI_API_KEY. Run: firebase functions:secrets:set OPENAI_API_KEY && firebase deploy --only functions",
+      });
+    }
+
+    try {
+      const result = await executeTimeLapseChat(payload, apiKey);
+      return res.json(result);
+    } catch (e) {
+      const status = e.statusCode || 500;
+      return res.status(status).json({ error: e.message || "Chat failed." });
+    }
+  },
+);

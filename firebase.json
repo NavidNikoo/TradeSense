@@ -21,6 +21,12 @@
         }
       },
       {
+        "source": "/api/timelapse-chat",
+        "function": {
+          "functionId": "timeLapseChatHttp"
+        }
+      },
+      {
         "source": "**",
         "destination": "/index.html"
       }

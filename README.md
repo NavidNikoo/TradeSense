@@ -66,6 +66,25 @@ The Cloud Function `chartProxy` is wired via a Hosting rewrite in `firebase.json
    VITE_HUGGINGFACE_API_KEY=hf_...
    ```
 
+### OpenAI — Time-Lapse AI Chat (optional)
+
+The Time-Lapse page includes an AI chat grounded in your saved snapshots. The browser calls **`/api/timelapse-chat`**, which Firebase Hosting rewrites to the Cloud Function **`timeLapseChatHttp`**. Your OpenAI key stays on the server (Firebase secret), not in Vite.
+
+1. Get an API key from [https://platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+2. Store it as a Firebase secret (not in `.env`):
+   ```bash
+   firebase functions:secrets:set OPENAI_API_KEY
+   ```
+3. Deploy the function **and** update Hosting rewrites (first-time setup for this feature):
+   ```bash
+   cd functions && npm install && cd ..
+   firebase deploy --only functions,hosting
+   ```
+
+**Local dev (`npm run dev`):** `vite.config.js` proxies `/api/timelapse-chat` to `https://us-central1-<VITE_FIREBASE_PROJECT_ID>.cloudfunctions.net/timeLapseChatHttp`. Your `.env` must include **`VITE_FIREBASE_PROJECT_ID`** (and the function must be deployed) so the dev server can reach the backend.
+
+The chat uses `gpt-4o-mini`. If the secret is missing, invalid, or the function is not deployed, the UI shows the server error message instead of a generic failure.
+
 ## 3) Valid ticker symbols
 
 Use **standard US stock tickers**, not full company names:

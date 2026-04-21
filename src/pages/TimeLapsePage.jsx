@@ -7,6 +7,7 @@ import { useAuth } from '../contexts/AuthContext'
 import { useWatchlist } from '../hooks/useWatchlist'
 import { getSnapshots, deleteSnapshot } from '../services/timeLapseService'
 import { buildTimeLapseInsights } from '../utils/timeLapseInsights'
+import { TimeLapseChatPanel } from '../components/TimeLapseChatPanel'
 
 const DATE_PRESETS = [
   { label: '7 days', days: 7 },
@@ -563,7 +564,16 @@ export function TimeLapsePage() {
               </div>
             </div>
 
-            <InsightsCard insights={insights} />
+            <div className="tl-results-sidebar">
+              <InsightsCard insights={insights} />
+              <TimeLapseChatPanel
+                symbol={selectedSymbol}
+                startDate={startDate}
+                endDate={endDate}
+                snapshots={snapshots}
+                insights={insights}
+              />
+            </div>
           </div>
         </div>
       )}
