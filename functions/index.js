@@ -217,7 +217,10 @@ exports.finbertProxy = onRequest(
     region: "us-central1",
     secrets: [huggingfaceKey],
     invoker: "public",
-    timeoutSeconds: 30,
+    // HuggingFace serverless inference can take 20-40s on a cold model load,
+    // so we give the function plenty of headroom. The browser-side fetch in
+    // sentimentService.js still completes in ~1s when the model is warm.
+    timeoutSeconds: 120,
     memory: "256MiB",
   },
   async (req, res) => {
@@ -253,6 +256,11 @@ exports.finbertProxy = onRequest(
           Authorization: `Bearer ${apiKey}`,
           "Content-Type": "application/json",
           Accept: "application/json",
+          // Tell HF to block until the model is loaded (cold-start safety).
+          // Without this header, HF returns 503 "Model is loading" for
+          // 20-40s after a period of inactivity.
+          "x-wait-for-model": "true",
+          "x-use-cache": "true",
         },
         body: JSON.stringify({ inputs }),
       });

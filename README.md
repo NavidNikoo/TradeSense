@@ -2,13 +2,18 @@
 
 TradeSense is a sentiment-aware stock dashboard for the CPSC 491 capstone project.
 
+**Live URL:** [https://tradesense-3101b.web.app](https://tradesense-3101b.web.app)
+
 - React + Vite project scaffold
 - Firebase initialization (Auth + Firestore)
 - Email/password authentication flow
 - Protected routes and app layout
 - Dashboard with live stock prices, charts, news, and sentiment
+- Technical indicators (RSI, SMA 20/50, volatility) overlaid on charts
+- Plain-English sentiment explanations powered by **live FinBERT (ProsusAI/finbert)**
 - Watchlist management (add, remove, reorder)
-- Time-Lapse sentiment snapshots
+- Time-Lapse sentiment snapshots + AI chat (OpenAI `gpt-4o-mini`)
+- Market Alerts (price, RSI, sentiment) with edge detection + cooldown
 
 ## 1) Local setup
 
@@ -58,13 +63,39 @@ The Cloud Function `chartProxy` is wired via a Hosting rewrite in `firebase.json
 3. Enable **Authentication > Sign-in method > Email/Password**.
 4. Create **Firestore Database** (start in test mode for initial local dev).
 
-### Hugging Face (optional — sentiment analysis)
+### Hugging Face — sentiment analysis (FinBERT, live in production)
 
-1. Sign up at [https://huggingface.co](https://huggingface.co).
-2. Create an access token and paste into `.env`:
+Sentiment scoring uses **ProsusAI/finbert** via the HuggingFace inference router. The browser **never** calls HuggingFace directly — all requests go through a server-side proxy:
+
+- **Local dev:** browser → Vite proxy (`/api/finbert`) → `proxy.cjs` (port 3001) → HuggingFace
+- **Production:** browser → Firebase Hosting rewrite (`/api/finbert`) → Cloud Function `finbertProxy` → HuggingFace
+
+The HF token lives only on the server, never in `.env` shipped to clients.
+
+1. Sign up at [https://huggingface.co](https://huggingface.co) and create a read token.
+2. **Local dev:** put it in `.env` as `VITE_HUGGINGFACE_API_KEY=hf_...` (read by `proxy.cjs`).
+3. **Production:** store it as a Firebase secret instead of `.env`:
+   ```bash
+   firebase functions:secrets:set HUGGINGFACE_API_KEY
+   firebase deploy --only functions:finbertProxy
    ```
-   VITE_HUGGINGFACE_API_KEY=hf_...
-   ```
+
+#### Verify live FinBERT in production
+
+```bash
+./scripts/verify-finbert.sh
+# Or against a different host:
+./scripts/verify-finbert.sh https://staging.example.com
+```
+
+A `✓ Live FinBERT scoring is working in production.` line means everything is wired correctly. In the UI, every ticker's sentiment block also displays a chip:
+
+- **"FinBERT: Live"** → real model output
+- **"Simulated (HF key missing)"** → server has no `HUGGINGFACE_API_KEY` secret
+- **"Simulated (HF API error)"** → upstream HF error
+- **"Simulated (network error)"** → fetch failed
+
+The `finbertProxy` Cloud Function sends `x-wait-for-model: true` so the **first** call after a long idle period waits for HF's model to warm up (20–40s) instead of failing — subsequent calls return in ~1s.
 
 ### OpenAI — Time-Lapse AI Chat (optional)
 
@@ -109,6 +140,7 @@ Recommended watchlist size: **5 symbols or fewer** for the free tier.
 - `npm run build` — Build production bundle
 - `npm run preview` — Preview production build
 - `npm run lint` — Run ESLint
+- `./scripts/verify-finbert.sh` — Hit the deployed FinBERT proxy with three known-bias headlines and report whether live scoring is working
 
 ## 5) Current app routes
 
