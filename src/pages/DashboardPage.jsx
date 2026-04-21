@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { Link } from 'react-router-dom'
 import { useWatchlist } from '../hooks/useWatchlist'
 import { useAuth } from '../contexts/AuthContext'
@@ -11,7 +11,7 @@ const HINT_KEY = 'tradesense_first_run_dismissed'
 
 export function DashboardPage() {
   const { user } = useAuth()
-  const { symbols, loading } = useWatchlist()
+  const { symbols, loading, moveSymbol } = useWatchlist()
   const [hintDismissed, setHintDismissed] = useState(
     () => localStorage.getItem(HINT_KEY) === '1',
   )
@@ -26,6 +26,9 @@ export function DashboardPage() {
   const [visibleCount, setVisibleCount] = useState(0)
   const [expandedSymbol, setExpandedSymbol] = useState(null)
 
+  const [cardOrder, setCardOrder] = useState([])
+  const [swapping, setSwapping] = useState(null)
+
   const displaySymbols = useMemo(() => {
     const list = symbols.slice(0, 10)
     if (sortBy === 'alpha') return [...list].sort()
@@ -38,6 +41,46 @@ export function DashboardPage() {
     }
     return list
   }, [symbols, sortBy, quoteMap])
+
+  const prevSymbolCountRef = useRef(0)
+  const [orderedSymbols, setOrderedSymbols] = useState([])
+
+  useEffect(() => {
+    const currentSet = new Set(orderedSymbols)
+    const newSet = new Set(displaySymbols)
+    const setsMatch = orderedSymbols.length === displaySymbols.length &&
+      displaySymbols.every(s => currentSet.has(s)) &&
+      orderedSymbols.every(s => newSet.has(s))
+
+    if (!setsMatch) {
+      setOrderedSymbols([...displaySymbols])
+    }
+  }, [displaySymbols])
+
+  function handleSwap(posA, posB) {
+    if (swapping || posB < 0 || posB >= orderedSymbols.length) return
+    setSwapping({ from: posA, to: posB })
+
+    const symA = orderedSymbols[posA]
+    const symB = orderedSymbols[posB]
+
+    setTimeout(() => {
+      setOrderedSymbols(prev => {
+        const next = [...prev]
+        ;[next[posA], next[posB]] = [next[posB], next[posA]]
+        return next
+      })
+      setSwapping(null)
+
+      const watchlistIndexA = symbols.indexOf(symA)
+      const watchlistIndexB = symbols.indexOf(symB)
+      const steps = watchlistIndexB - watchlistIndexA
+      const direction = steps > 0 ? 1 : -1
+      for (let i = 0; i < Math.abs(steps); i++) {
+        moveSymbol(watchlistIndexA + direction * i, direction)
+      }
+    }, 280)
+  }
 
   useEffect(() => {
     if (loading || symbols.length === 0) return
@@ -153,16 +196,43 @@ export function DashboardPage() {
       <DashboardTickerStrip symbols={symbols} />
 
       <div className="dashboard-grid">
-        {displaySymbols.map((sym, i) => (
-          i < visibleCount ? (
-            <TickerPanel
+        {orderedSymbols.map((sym, pos) => {
+          const isSwapping = swapping !== null && (swapping.from === pos || swapping.to === pos)
+          const slideDir = isSwapping
+            ? (swapping.from === pos
+              ? (pos < swapping.to ? 'slide-right' : 'slide-left')
+              : (pos < swapping.from ? 'slide-left' : 'slide-right'))
+            : ''
+
+          return pos < visibleCount ? (
+            <div
               key={sym}
-              symbol={sym}
-              expanded={expandedSymbol === sym}
-              onToggleExpand={handleToggleExpand}
-              onSnapshot={handleSnapshot}
-              onQuoteLoaded={(data) => handleQuoteLoaded(sym, data)}
-            />
+              className={`ticker-panel-wrapper ${slideDir}`}
+            >
+              <TickerPanel
+                symbol={sym}
+                expanded={expandedSymbol === sym}
+                onToggleExpand={handleToggleExpand}
+                onSnapshot={handleSnapshot}
+                onQuoteLoaded={(data) => handleQuoteLoaded(sym, data)}
+              />
+              <div className="swap-btn-row">
+                <button
+                  type="button"
+                  className="swap-btn"
+                  onClick={() => handleSwap(pos, pos - 1)}
+                  disabled={pos === 0 || !!swapping}
+                  aria-label={`Move ${sym} left`}
+                >←</button>
+                <button
+                  type="button"
+                  className="swap-btn"
+                  onClick={() => handleSwap(pos, pos + 1)}
+                  disabled={pos === orderedSymbols.length - 1 || !!swapping}
+                  aria-label={`Move ${sym} right`}
+                >→</button>
+              </div>
+            </div>
           ) : (
             <div key={sym} className="ticker-panel ticker-skeleton">
               <div className="skeleton-line skeleton-title" />
@@ -171,7 +241,7 @@ export function DashboardPage() {
               <div className="skeleton-line skeleton-text short" />
             </div>
           )
-        ))}
+        })}
       </div>
     </section>
   )
