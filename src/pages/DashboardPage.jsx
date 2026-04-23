@@ -5,16 +5,22 @@ import { useAuth } from '../contexts/AuthContext'
 import { useAlertRules } from '../hooks/useAlertRules'
 import { TickerPanel } from '../components/TickerPanel'
 import { DashboardTickerStrip } from '../components/DashboardTickerStrip'
-import { saveSnapshot } from '../services/timeLapseService'
+import { SectorFilter } from '../components/SectorFilter'
+import { saveSnapshot, getLastSnapshotTime, setLastSnapshotTime } from '../services/timeLapseService'
+import { useTimeLapse } from '../hooks/useTimeLapse'
 import { evaluateRulesForSymbol } from '../utils/alertEvaluator'
+import { getCompanyProfile } from '../services/marketDataService'
+import { getSectorFromMap } from '../utils/sectorMap'
 
 const STAGGER_MS = 80
 const HINT_KEY = 'tradesense_first_run_dismissed'
+const SECTOR_FILTER_KEY = 'tradesense_sector_filter'
 
 export function DashboardPage() {
   const { user } = useAuth()
   const { symbols, loading, moveSymbol } = useWatchlist()
   const { rules: alertRules } = useAlertRules()
+  const { isEnabled: isTimeLapseEnabled, toggle: toggleTimeLapse } = useTimeLapse()
   const alertRulesRef = useRef(alertRules)
   useEffect(() => { alertRulesRef.current = alertRules }, [alertRules])
   const [hintDismissed, setHintDismissed] = useState(
@@ -34,6 +40,13 @@ export function DashboardPage() {
   const [cardOrder, setCardOrder] = useState([])
   const [swapping, setSwapping] = useState(null)
 
+  // --- Sector filter state ---
+  const [sectorMap, setSectorMap] = useState({})       // { AAPL: 'Technology', ... }
+  const [sectorLoading, setSectorLoading] = useState(false)
+  const [activeSector, setActiveSector] = useState(
+    () => localStorage.getItem(SECTOR_FILTER_KEY) || 'All'
+  )
+
   const displaySymbols = useMemo(() => {
     const list = symbols.slice(0, 10)
     if (sortBy === 'alpha') return [...list].sort()
@@ -46,6 +59,58 @@ export function DashboardPage() {
     }
     return list
   }, [symbols, sortBy, quoteMap])
+
+  // --- Fetch sector for each symbol (static map first, API fallback) ---
+  useEffect(() => {
+    if (loading || symbols.length === 0) return
+
+    setSectorLoading(true)
+    let cancelled = false
+
+    async function fetchSectors() {
+      const results = {}
+
+      await Promise.all(
+        symbols.map(async (sym) => {
+          const fromMap = getSectorFromMap(sym)
+          if (fromMap) {
+            results[sym] = fromMap
+            return
+          }
+          const profile = await getCompanyProfile(sym)
+          if (!cancelled && profile?.sector) {
+            results[sym] = profile.sector
+          }
+        })
+      )
+
+      if (!cancelled) {
+        setSectorMap(results)
+        setSectorLoading(false)
+      }
+    }
+
+    fetchSectors()
+    return () => { cancelled = true }
+  }, [symbols, loading])
+
+  // Persist active sector choice
+  useEffect(() => {
+    localStorage.setItem(SECTOR_FILTER_KEY, activeSector)
+  }, [activeSector])
+
+  // Unique sorted sectors present in the current watchlist
+  const availableSectors = useMemo(() => {
+    const set = new Set(Object.values(sectorMap))
+    return [...set].sort()
+  }, [sectorMap])
+
+  // Reset filter to 'All' if the active sector disappears from the watchlist
+  useEffect(() => {
+    if (activeSector !== 'All' && !availableSectors.includes(activeSector)) {
+      setActiveSector('All')
+    }
+  }, [availableSectors, activeSector])
 
   const prevSymbolCountRef = useRef(0)
   const [orderedSymbols, setOrderedSymbols] = useState([])
@@ -109,15 +174,37 @@ export function DashboardPage() {
     })
   }
 
+  const AUTO_SNAPSHOT_INTERVAL_MS = 60 * 60 * 1000 // 1 hour
+
   const handleDataReady = useCallback((payload) => {
     if (!user?.uid || !payload?.symbol) return
+
     evaluateRulesForSymbol({
       uid: user.uid,
       rules: alertRulesRef.current,
       symbol: payload.symbol,
       data: payload,
     })
-  }, [user?.uid])
+
+    // Auto-snapshot if time-lapse is enabled and 1 hour has elapsed
+    if (isTimeLapseEnabled(payload.symbol)) {
+      const last = getLastSnapshotTime(user.uid, payload.symbol)
+      if (last === null || Date.now() - last >= AUTO_SNAPSHOT_INTERVAL_MS) {
+        setLastSnapshotTime(user.uid, payload.symbol)
+        saveSnapshot(user.uid, payload.symbol, {
+          sentimentSummary: payload.sentimentLabel
+            ? { label: payload.sentimentLabel, score: 0 }
+            : { label: 'unknown', score: 0 },
+          priceSnapshot: {
+            close: payload.price ?? 0,
+            changePercent: payload.changePercent ?? 0,
+          },
+        }).catch(() => {
+          // Non-fatal — next interval will retry
+        })
+      }
+    }
+  }, [user?.uid, isTimeLapseEnabled])
 
   async function handleSnapshot(data) {
     if (!user) throw new Error('Not signed in')
@@ -163,6 +250,11 @@ export function DashboardPage() {
   const upCount = Object.values(quoteMap).filter((q) => q?.changePercent > 0).length
   const downCount = Object.values(quoteMap).filter((q) => q?.changePercent < 0).length
   const flatCount = Object.keys(quoteMap).length - upCount - downCount
+
+  const filteredSymbols = useMemo(() => {
+    if (activeSector === 'All') return orderedSymbols
+    return orderedSymbols.filter((sym) => sectorMap[sym] === activeSector)
+  }, [orderedSymbols, activeSector, sectorMap])
 
   return (
     <section className="dashboard-wrapper">
@@ -210,8 +302,22 @@ export function DashboardPage() {
 
       <DashboardTickerStrip symbols={symbols} />
 
+      <SectorFilter
+        sectors={availableSectors}
+        active={activeSector}
+        onChange={setActiveSector}
+        loading={sectorLoading && availableSectors.length === 0}
+      />
+
+      {activeSector !== 'All' && filteredSymbols.length === 0 && (
+        <p className="sector-filter-empty muted-label">
+          No symbols in your watchlist match the <strong>{activeSector}</strong> sector.
+          Add one on the <a href="/watchlist">Watchlist</a> page.
+        </p>
+      )}
+
       <div className="dashboard-grid">
-        {orderedSymbols.map((sym, pos) => {
+        {filteredSymbols.map((sym, pos) => {
           const isSwapping = swapping !== null && (swapping.from === pos || swapping.to === pos)
           const slideDir = isSwapping
             ? (swapping.from === pos
@@ -231,6 +337,8 @@ export function DashboardPage() {
                 onSnapshot={handleSnapshot}
                 onQuoteLoaded={(data) => handleQuoteLoaded(sym, data)}
                 onDataReady={handleDataReady}
+                timeLapseEnabled={isTimeLapseEnabled(sym)}
+                onToggleTimeLapse={toggleTimeLapse}
               />
               <div className="swap-btn-row">
                 <button
