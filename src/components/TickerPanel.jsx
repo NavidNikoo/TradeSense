@@ -46,7 +46,7 @@ function formatVolTierLabel(tier) {
   return 'Unavailable'
 }
 
-export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, expanded, onToggleExpand }) {
+export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, expanded, onToggleExpand, timeLapseEnabled, onToggleTimeLapse }) {
   const [quote, setQuote] = useState(null)
   const [newsError, setNewsError] = useState(null)
   const [articles, setArticles] = useState([])
@@ -253,10 +253,15 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, ex
   const panelId = `ticker-panel-${(quote?.symbol || symbol).replace(/[^a-z0-9]/gi, '-')}`
 
   return (
-    <div className={`ticker-panel ${expanded ? 'ticker-panel--expanded' : ''}`} id={panelId}>
+    <div className={`ticker-panel ${expanded ? 'ticker-panel--expanded' : ''} ${timeLapseEnabled ? 'ticker-panel--recording' : ''}`} id={panelId}>
       <div className="ticker-panel-top">
         <div className="ticker-hero">
-          <p className="ticker-exchange">US · {quote?.symbol || symbol}</p>
+          <p className="ticker-exchange">
+            US · {quote?.symbol || symbol}
+            {timeLapseEnabled && (
+              <span className="timelapse-dot" title="Time-Lapse recording active" aria-label="Recording" />
+            )}
+          </p>
           <div className="ticker-price-row">
             <span className="ticker-price-main">${quote?.price?.toFixed(2)}</span>
             <span className="ticker-change-pill">
@@ -276,15 +281,28 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, ex
             <p className="ticker-asof">As of {quote.updatedAt}</p>
           )}
         </div>
-        <button
-          type="button"
-          className="expand-btn expand-btn--toolbar"
-          onClick={handleExpand}
-          aria-expanded={expanded}
-          aria-controls={`${panelId}-chart`}
-        >
-          {expanded ? 'Collapse' : 'Chart'}
-        </button>
+        <div className="ticker-panel-actions">
+          {onToggleTimeLapse && (
+            <button
+              type="button"
+              className={`timelapse-toggle-btn${timeLapseEnabled ? ' timelapse-toggle-btn--active' : ''}`}
+              onClick={() => onToggleTimeLapse(symbol)}
+              aria-pressed={!!timeLapseEnabled}
+              title={timeLapseEnabled ? 'Disable Time-Lapse auto-recording' : 'Enable Time-Lapse auto-recording'}
+            >
+              {timeLapseEnabled ? 'Time-Lapse On' : 'Time-Lapse Off'}
+            </button>
+          )}
+          <button
+            type="button"
+            className="expand-btn expand-btn--toolbar"
+            onClick={handleExpand}
+            aria-expanded={expanded}
+            aria-controls={`${panelId}-chart`}
+          >
+            {expanded ? 'Collapse' : 'Chart'}
+          </button>
+        </div>
       </div>
 
       {hasDayRange && !expanded && (
@@ -613,6 +631,7 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, ex
             {saveStatus === 'saving' ? 'Saving…'
               : saveStatus === 'saved' ? 'Saved!'
               : saveStatus === 'error' ? 'Save failed — retry?'
+              : timeLapseEnabled ? 'Save snapshot now'
               : 'Save to Time-Lapse'}
           </button>
 
