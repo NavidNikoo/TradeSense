@@ -1362,6 +1362,83 @@ input {
   outline-offset: 2px;
 }
 
+/* --- Ticker panel actions row (time-lapse toggle + chart button) --- */
+
+.ticker-panel-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+  flex-shrink: 0;
+}
+
+/* --- Time-lapse toggle button --- */
+
+.timelapse-toggle-btn {
+  padding: 0.28rem 0.7rem;
+  border-radius: var(--app-radius-sm);
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text-secondary);
+  font-size: 0.75rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.timelapse-toggle-btn:hover {
+  background: var(--app-surface-hover);
+  border-color: var(--app-text-faint);
+  color: var(--app-text);
+}
+
+.timelapse-toggle-btn--active {
+  background: #7c3aed;
+  border-color: #7c3aed;
+  color: #fff;
+}
+
+.timelapse-toggle-btn--active:hover {
+  background: #6d28d9;
+  border-color: #6d28d9;
+  color: #fff;
+}
+
+/* --- Recording dot (pulsing indicator shown next to ticker symbol) --- */
+
+.timelapse-dot {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #7c3aed;
+  margin-left: 6px;
+  vertical-align: middle;
+  animation: timelapse-pulse 1.6s ease-in-out infinite;
+}
+
+@keyframes timelapse-pulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.35; transform: scale(0.75); }
+}
+
+/* --- Subtle border highlight on recording cards --- */
+
+.ticker-panel--recording {
+  border-color: rgba(124, 58, 237, 0.45);
+  box-shadow: 0 0 0 1px rgba(124, 58, 237, 0.15), var(--app-shadow-md);
+}
+
+[data-theme="dark"] .ticker-panel--recording {
+  border-color: rgba(167, 139, 250, 0.45);
+  box-shadow: 0 0 0 1px rgba(167, 139, 250, 0.12), var(--app-shadow-md);
+}
+
+[data-theme="dark"] .timelapse-toggle-btn--active {
+  background: #7c3aed;
+  border-color: #7c3aed;
+}
+
 .ticker-stats-strip {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
@@ -2291,6 +2368,73 @@ input {
   color: var(--app-text);
   background-color: rgba(0, 0, 0, 0.05);
 }
+
+/* --- Sector filter pills --- */
+
+.sector-filter {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.sector-pill {
+  padding: 0.3rem 0.85rem;
+  border-radius: 999px;
+  border: 1px solid var(--app-border);
+  background: var(--app-surface);
+  color: var(--app-text-secondary);
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+  white-space: nowrap;
+}
+
+.sector-pill:hover {
+  background: var(--app-surface-hover);
+  border-color: var(--app-text-faint);
+  color: var(--app-text);
+}
+
+.sector-pill--active {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+  color: #fff;
+}
+
+.sector-pill--active:hover {
+  background: var(--app-accent-hover);
+  border-color: var(--app-accent-hover);
+  color: #fff;
+}
+
+.sector-filter-skeleton {
+  height: 1.75rem;
+  border-radius: 999px;
+}
+
+.sector-filter-empty {
+  margin: 0 0 1rem;
+}
+
+[data-theme="dark"] .sector-pill {
+  background: var(--app-surface);
+  border-color: var(--app-border);
+  color: var(--app-text-secondary);
+}
+
+[data-theme="dark"] .sector-pill:hover {
+  background: var(--app-surface-hover);
+}
+
+[data-theme="dark"] .sector-pill--active {
+  background: var(--app-accent);
+  border-color: var(--app-accent);
+  color: #fff;
+}
+
+/* --- Dashboard grid --- */
 
 .dashboard-grid {
   display: grid;
