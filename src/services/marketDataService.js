@@ -339,6 +339,45 @@ function mergeHintsWithApi(hints, apiRows) {
   return merged
 }
 
+// --- Company profile (sector / industry) ---
+
+/**
+ * Fetches basic company profile from Finnhub /stock/profile2.
+ * Returns { name, sector, industry } or null if unavailable.
+ * Cached for 60 minutes — sector data changes rarely.
+ */
+const PROFILE_CACHE_TTL_MS = 60 * 60 * 1000
+
+export async function getCompanyProfile(symbol) {
+  const upper = normalizeTicker(symbol)
+
+  if (!FINNHUB_KEY) return null
+
+  const cacheKey = `profile:${upper}`
+  const entry = cache.get(cacheKey)
+  if (entry && Date.now() - entry.ts < PROFILE_CACHE_TTL_MS) return entry.data
+
+  try {
+    const url = `${FINNHUB_BASE}/stock/profile2?symbol=${encodeURIComponent(upper)}&token=${FINNHUB_KEY}`
+    const res = await fetch(url)
+    if (!res.ok) return null
+
+    const json = await res.json()
+    if (!json || !json.finnhubIndustry) return null
+
+    const data = {
+      name: json.name || upper,
+      sector: json.finnhubIndustry || 'Other',
+      industry: json.finnhubIndustry || 'Other',
+    }
+
+    cache.set(cacheKey, { data, ts: Date.now() })
+    return data
+  } catch {
+    return null
+  }
+}
+
 // --- Public API ---
 
 export const AVAILABLE_RANGES = ['1d', '5d', '1m', '3m', '6m', '1y', 'ytd']
