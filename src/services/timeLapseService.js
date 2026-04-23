@@ -4,6 +4,11 @@ import {
   getDocs,
   deleteDoc,
   doc,
+  getDoc,
+  setDoc,
+  updateDoc,
+  arrayUnion,
+  arrayRemove,
   query,
   where,
   orderBy,
@@ -12,6 +17,46 @@ import {
 import { db } from '../firebase/config'
 
 const COLLECTION = 'time_lapse'
+const WATCHLIST_COLLECTION = 'watchlists'
+
+// --- Per-stock time-lapse enable/disable (stored on the watchlist doc) ---
+
+export async function getTimeLapseSymbols(userId) {
+  const ref = doc(db, WATCHLIST_COLLECTION, userId)
+  const snap = await getDoc(ref)
+  if (!snap.exists()) return []
+  return snap.data().timeLapseSymbols ?? []
+}
+
+export async function setTimeLapseSymbol(userId, symbol, enabled) {
+  const upper = symbol.toUpperCase()
+  const ref = doc(db, WATCHLIST_COLLECTION, userId)
+  const snap = await getDoc(ref)
+
+  if (!snap.exists()) {
+    if (enabled) await setDoc(ref, { symbols: [], timeLapseSymbols: [upper] })
+    return
+  }
+
+  await updateDoc(ref, {
+    timeLapseSymbols: enabled ? arrayUnion(upper) : arrayRemove(upper),
+  })
+}
+
+// --- localStorage helpers for auto-snapshot interval ---
+
+function lastSnapshotKey(userId, symbol) {
+  return `tradesense_tl_last:${userId}:${symbol.toUpperCase()}`
+}
+
+export function getLastSnapshotTime(userId, symbol) {
+  const val = localStorage.getItem(lastSnapshotKey(userId, symbol))
+  return val ? parseInt(val, 10) : null
+}
+
+export function setLastSnapshotTime(userId, symbol) {
+  localStorage.setItem(lastSnapshotKey(userId, symbol), String(Date.now()))
+}
 
 export async function saveSnapshot(userId, symbol, data) {
   await addDoc(collection(db, COLLECTION), {
