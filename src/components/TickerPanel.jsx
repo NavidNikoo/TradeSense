@@ -51,6 +51,7 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, ex
   const [newsError, setNewsError] = useState(null)
   const [articles, setArticles] = useState([])
   const [sentiment, setSentiment] = useState(null)
+  const [sentimentLoading, setSentimentLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState(null)
 
@@ -98,23 +99,35 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, ex
     setNewsError(null)
     setArticles([])
     setSentiment(null)
+    setSentimentLoading(false)
 
     async function load() {
       try {
-        const quoteData = await getQuote(symbol)
+        const [quoteData, newsResult] = await Promise.all([
+          getQuote(symbol),
+          getNews(symbol).catch((err) => ({ _err: err })),
+        ])
         if (cancelled) return
         setQuote(quoteData)
         onQuoteLoaded?.(quoteData)
-
-        const newsResult = await getNews(symbol).catch((err) => ({ _err: err }))
-        if (cancelled) return
 
         if (newsResult._err) {
           setNewsError(newsResult._err.message || 'News unavailable')
         } else {
           setArticles(newsResult.articles)
-          const sentimentData = await scoreArticles(newsResult.articles)
-          if (!cancelled) setSentiment(sentimentData)
+          setLoading(false)
+          setSentimentLoading(true)
+
+          scoreArticles(newsResult.articles)
+            .then((sentimentData) => {
+              if (!cancelled) setSentiment(sentimentData)
+            })
+            .catch(() => {
+              if (!cancelled) setSentiment(null)
+            })
+            .finally(() => {
+              if (!cancelled) setSentimentLoading(false)
+            })
         }
       } catch (err) {
         if (!cancelled) setError(err.message)
@@ -592,6 +605,10 @@ export function TickerPanel({ symbol, onSnapshot, onQuoteLoaded, onDataReady, ex
             </ul>
           )}
         </div>
+      )}
+
+      {sentimentLoading && !sentiment?.aggregate && (
+        <p className="ticker-inline-error">Loading FinBERT sentiment…</p>
       )}
 
       {newsError && articles.length === 0 && (
