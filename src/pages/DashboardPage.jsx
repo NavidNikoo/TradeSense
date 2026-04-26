@@ -214,6 +214,11 @@ export function DashboardPage() {
     })
   }
 
+  const filteredSymbols = useMemo(() => {
+    if (activeSector === 'All') return orderedSymbols
+    return orderedSymbols.filter((sym) => sectorMap[sym] === activeSector)
+  }, [orderedSymbols, activeSector, sectorMap])
+
   if (loading) {
     return (
       <section className="dashboard-wrapper">
@@ -250,11 +255,6 @@ export function DashboardPage() {
   const upCount = Object.values(quoteMap).filter((q) => q?.changePercent > 0).length
   const downCount = Object.values(quoteMap).filter((q) => q?.changePercent < 0).length
   const flatCount = Object.keys(quoteMap).length - upCount - downCount
-
-  const filteredSymbols = useMemo(() => {
-    if (activeSector === 'All') return orderedSymbols
-    return orderedSymbols.filter((sym) => sectorMap[sym] === activeSector)
-  }, [orderedSymbols, activeSector, sectorMap])
 
   return (
     <section className="dashboard-wrapper">
