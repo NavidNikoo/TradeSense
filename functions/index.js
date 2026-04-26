@@ -249,6 +249,16 @@ exports.finbertProxy = onRequest(
 
     const inputs = payload.inputs.map((x) => String(x || "").slice(0, FINBERT_MAX_INPUT_LEN));
 
+    // Forward `parameters` from the client (defaulting to `top_k: null`) so HF
+    // returns the full per-input label distribution, not just the top label.
+    // Without this, the response is `[[topA, topB, ...]]` (one outer array) —
+    // which mismatches the frontend's shape check `json.length === inputs.length`
+    // and makes every ticker fall back to "Simulated (HF API error)".
+    const parameters =
+      payload.parameters && typeof payload.parameters === "object"
+        ? payload.parameters
+        : { top_k: null };
+
     try {
       const upstream = await fetch(HF_FINBERT_URL, {
         method: "POST",
@@ -262,7 +272,7 @@ exports.finbertProxy = onRequest(
           "x-wait-for-model": "true",
           "x-use-cache": "true",
         },
-        body: JSON.stringify({ inputs }),
+        body: JSON.stringify({ inputs, parameters }),
       });
 
       const text = await upstream.text();
